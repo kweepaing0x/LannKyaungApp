@@ -4,9 +4,12 @@ const config: CapacitorConfig = {
   appId: "com.lannkyaung.app",
   appName: "Lann Kyaing",
   webDir: "dist",
+  server: {
+    androidScheme: "https"
+  },
   android: {
     allowMixedContent: true,
-    webContentsDebuggingEnabled: false,
+    webContentsDebuggingEnabled: false, // Pure boolean, 100% safe for the build runner
   },
   plugins: {
     SplashScreen: {
