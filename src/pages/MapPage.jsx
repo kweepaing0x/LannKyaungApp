@@ -370,8 +370,8 @@ export default function MapPage(){
               </div>
               <div style={{color:"#666",fontSize:12,lineHeight:1.6,maxWidth:280,margin:"0 auto"}}>
                 {gpsStatus==="denied"
-                  ? "You blocked location access. To enable:
-Settings → Browser → Location → Allow"
+                  ? `You blocked location access. To enable:
+Settings → Browser → Location → Allow`
                   : gpsStatus==="unavailable"
                   ? "GPS is not available on this device or connection."
                   : "Waiting for GPS signal..."}
