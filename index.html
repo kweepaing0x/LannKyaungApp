@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+
+  <!-- ── PWA / App install ───────────────────────────────────── -->
+  <link rel="manifest" href="/manifest.json"/>
+  <meta name="theme-color" content="#0d0d0d"/>
+
+  <!-- Android -->
+  <meta name="mobile-web-app-capable" content="yes"/>
+
+  <!-- iOS -->
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Lann Kyaing"/>
+
+  <!-- iOS icons (Safari doesn't read manifest icons) -->
+  <link rel="apple-touch-icon" href="/icons/icon-192.png"/>
+  <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png"/>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png"/>
+  <link rel="shortcut icon" href="/icons/icon-96.png"/>
+
+  <title>Lann Kyaing · လမ်းကြောင်း</title>
+
+  <!-- ── External assets ─────────────────────────────────────── -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+    html { height:100%; height:-webkit-fill-available; background:#0d0d0d; }
+    body {
+      height:100%; height:-webkit-fill-available;
+      width:100%; overflow:hidden; background:#0d0d0d; color:#fff;
+      font-family:-apple-system,'Segoe UI',sans-serif;
+      position:fixed; top:0; left:0; right:0; bottom:0;
+    }
+    #root { height:100%; width:100%; overflow:hidden; display:flex; flex-direction:column; background:#0d0d0d; }
+    .lk-popup .leaflet-popup-content-wrapper { background:#1a1a1a!important; border:0.5px solid rgba(255,255,255,0.12)!important; border-radius:12px!important; box-shadow:0 8px 32px rgba(0,0,0,0.7)!important; padding:0!important; }
+    .lk-popup .leaflet-popup-tip { background:#1a1a1a!important; }
+    .lk-popup .leaflet-popup-content { margin:0!important; }
+    .leaflet-control-attribution { background:rgba(13,13,13,0.8)!important; color:#555!important; font-size:9px!important; }
+    .leaflet-control-attribution a { color:#666!important; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script>
+    // ── Register service worker ─────────────────────────────────
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(reg => console.log('SW registered:', reg.scope))
+          .catch(err => console.warn('SW failed:', err));
+      });
+    }
+  </script>
+
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+</html>

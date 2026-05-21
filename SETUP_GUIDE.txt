@@ -1,0 +1,147 @@
+# Capacitor Setup — No Android Studio Needed
+# APK built in GitHub Actions cloud ☁️
+
+=================================================================
+WHAT YOU GET AFTER THIS SETUP
+=================================================================
+- Every push to main → GitHub builds APK automatically
+- Download APK from GitHub Actions → install on phone
+- Full native GPS, camera, Supabase realtime
+- No Android Studio, no local build tools
+
+=================================================================
+STEP 1 — Add files to your project
+=================================================================
+
+Copy these files into your project:
+
+  package.json          → replace existing (root)
+  vite.config.js        → replace existing (root)
+  capacitor.config.ts   → add to root
+  build-android.yml     → add to .github/workflows/build-android.yml
+
+Create the .github/workflows/ folder if it doesn't exist.
+
+Your project structure should look like:
+  lann-kyaung/
+  ├── .github/
+  │   └── workflows/
+  │       └── build-android.yml   ← NEW
+  ├── src/
+  ├── public/
+  ├── capacitor.config.ts         ← NEW
+  ├── vite.config.js              ← UPDATED (added base:"./")
+  ├── package.json                ← UPDATED (added capacitor deps)
+  └── .env                        ← already exists
+
+=================================================================
+STEP 2 — Add GitHub Secrets (your .env values)
+=================================================================
+
+1. Go to your GitHub repo
+2. Settings → Secrets and variables → Actions
+3. Click "New repository secret" and add BOTH:
+
+   Name:  VITE_SUPABASE_URL
+   Value: https://xxxx.supabase.co
+
+   Name:  VITE_SUPABASE_ANON
+   Value: eyJhbGci...your anon key...
+
+These are the same values from your .env file.
+GitHub encrypts them — nobody can see them.
+
+=================================================================
+STEP 3 — Push to GitHub
+=================================================================
+
+  git add .
+  git commit -m "add Capacitor setup"
+  git push origin main
+
+GitHub Actions starts automatically.
+Build takes about 5-8 minutes first time (Gradle downloads).
+
+=================================================================
+STEP 4 — Download your APK
+=================================================================
+
+1. Go to your GitHub repo
+2. Click the "Actions" tab
+3. Click the latest "Build Android APK" run
+4. Scroll down to "Artifacts"
+5. Download "lann-kyaung-debug-X.apk"
+6. Send to your phone (WhatsApp, Google Drive, email, etc.)
+7. On phone: tap the file → Install
+   (allow "Install from unknown sources" if prompted)
+
+=================================================================
+STEP 5 — One-time Android project setup (first build only)
+=================================================================
+
+After the first successful build, the android/ folder gets
+created inside the Actions runner but NOT committed to your repo.
+You need to commit it once so future builds don't re-init.
+
+Option A (recommended): Let the workflow handle it every time
+  → The workflow already checks if android/ exists before re-initing
+  → Works fine, just slightly slower on clean builds
+
+Option B: Commit android/ folder
+  git add android/
+  git commit -m "add android platform"
+  git push
+
+=================================================================
+STEP 6 — Add Android permissions (one time)
+=================================================================
+
+After first build, open android/app/src/main/AndroidManifest.xml
+and add the permissions from android_permissions.xml.
+
+Then push again — new APK will have all permissions.
+
+=================================================================
+FUTURE: Release APK for Play Store
+=================================================================
+
+When you're ready for Play Store, you need a signed APK.
+
+1. Generate a keystore (run this locally — save the file!):
+   keytool -genkey -v -keystore lann-kyaung.keystore \
+     -alias lannkyaung -keyalg RSA -keysize 2048 -validity 10000
+
+2. Convert to base64:
+   base64 lann-kyaung.keystore > keystore.b64
+   (on Windows: certutil -encode lann-kyaung.keystore keystore.b64)
+
+3. Add 4 more GitHub secrets:
+   KEYSTORE_BASE64    → contents of keystore.b64
+   KEY_ALIAS          → lannkyaung
+   KEY_PASSWORD       → your password
+   STORE_PASSWORD     → your password
+
+4. Update build-android.yml to use assembleRelease instead of
+   assembleDebug and add signing config.
+   (Ask Claude to generate the release workflow when ready)
+
+=================================================================
+TROUBLESHOOTING
+=================================================================
+
+Build fails with "SDK not found"
+  → The workflow installs everything automatically — this shouldn't
+    happen. Check the Actions log for the exact error.
+
+APK installs but shows white screen
+  → Make sure vite.config.js has base: "./"
+  → Check that npm run build succeeds locally first
+
+GPS not working in APK
+  → Add permissions from android_permissions.xml
+  → AndroidManifest.xml must have ACCESS_FINE_LOCATION
+
+Supabase not connecting in APK
+  → Check GitHub secrets are set correctly (Step 2)
+  → Secrets must be VITE_SUPABASE_URL and VITE_SUPABASE_ANON
+    (must start with VITE_ or Vite won't include them)
