@@ -1,0 +1,72 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:   # allows manual trigger from GitHub Actions tab
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout code ──────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Setup Node 20 ──────────────────────────────────────
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # ── 3. Setup Java 17 (required by Gradle) ────────────────
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: temurin
+
+      # ── 4. Write .env from GitHub secrets ────────────────────
+      - name: Create .env
+        run: |
+          echo "VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}" > .env
+          echo "VITE_SUPABASE_ANON=${{ secrets.VITE_SUPABASE_ANON }}" >> .env
+
+      # ── 5. Install dependencies ───────────────────────────────
+      - name: Install dependencies
+        run: npm install
+
+      # ── 6. Build Vite web app ─────────────────────────────────
+      - name: Build web app
+        run: npm run build
+
+      # ── 7. Init Capacitor if android/ folder doesn't exist ───
+      - name: Init Capacitor
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap init "Lann Kyaing" "com.lannkyaung.app" --web-dir dist
+            npx cap add android
+          fi
+
+      # ── 8. Sync web build into Android project ────────────────
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      # ── 9. Make gradlew executable ────────────────────────────
+      - name: Grant Gradle permissions
+        run: chmod +x android/gradlew
+
+      # ── 10. Build debug APK (no signing needed) ───────────────
+      - name: Build Debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      # ── 11. Upload APK as artifact ────────────────────────────
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: lann-kyaung-debug-${{ github.run_number }}.apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30   # keeps APK for 30 days
