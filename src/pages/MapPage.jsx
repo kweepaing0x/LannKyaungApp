@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "../store";
 import { subscribePins, subscribeCheckRequests, subscribeHistoryPins } from "../services/supabaseService";
 import PinPopup from "../components/PinPopup";
+import { getCurrentLocation } from "../services/locationService";
 
 const PIN_COLORS = {
   police:"#E24B4A",blocked:"#EF9F27",traffic:"#EF9F27",
