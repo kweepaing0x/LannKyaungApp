@@ -176,7 +176,7 @@ export default function MapPage(){
             className:"",
             html:`<div style="
               width:${sz}px;height:${sz}px;background:${color};border-radius:50%;
-              border:2.5px solid rgba(255,255,255,${hist?.2:.7});opacity:${hist?.4:1};
+              border:2.5px solid rgba(255,255,255,${hist ? 0.2 : 0.7});opacity:${hist ? 0.4 : 1.0};
               box-shadow:0 0 ${hist?3:10}px ${color}${hist?"33":"99"};cursor:pointer">
             </div>`,
             iconSize:[sz,sz], iconAnchor:[sz/2,sz/2],
