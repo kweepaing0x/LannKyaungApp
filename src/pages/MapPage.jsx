@@ -177,7 +177,7 @@ export default function MapPage(){
             className:"",
             html:`<div style="
               width:${sz}px;height:${sz}px;background:${color};border-radius:50%;
-              border:2.5px solid rgba(255,255,255,${hist ? 0.2 : 0.7});opacity:${hist ? 0.4 : 1.0};
+              border:2.5px solid rgba(255,255,255,${hist?.2:.7});opacity:${hist?.4:1};
               box-shadow:0 0 ${hist?3:10}px ${color}${hist?"33":"99"};cursor:pointer">
             </div>`,
             iconSize:[sz,sz], iconAnchor:[sz/2,sz/2],
@@ -188,44 +188,57 @@ export default function MapPage(){
     });
   },[pins,historyPins,mapReady,showHistory]);
 
-  function centerOnUser(){
-    if(userLocation&&mapInstance.current){
-      mapInstance.current.setView([userLocation.lat,userLocation.lng],16);
-    } else {
+  async function centerOnUser(){
+    try {
+      const location = await getCurrentLocation();
+
+      setGpsStatus("granted");
+      setShowGpsPopup(false);
+
+      setUserLocation({
+        lat: location.lat,
+        lng: location.lng
+      });
+
+      if(mapInstance.current){
+        mapInstance.current.setView(
+          [location.lat, location.lng],
+          16
+        );
+      }
+    } catch(err){
+      console.error("GPS error:", err);
       setShowGpsPopup(true);
+      setGpsStatus("denied");
     }
   }
 
-  function requestGpsAgain(){
-    if(!navigator.geolocation){ setGpsStatus("unavailable"); return; }
-    setGpsStatus("pending");
-    navigator.geolocation.getCurrentPosition(
-      (pos)=>{
-        setGpsStatus("granted");
-        setShowGpsPopup(false);
-        const ll=[pos.coords.latitude,pos.coords.longitude];
-        setUserLocation({lat:pos.coords.latitude,lng:pos.coords.longitude});
-        if(mapInstance.current) mapInstance.current.setView(ll,16);
-        if(userMarkerRef.current){
-          userMarkerRef.current.setLatLng(ll);
-        } else {
-          const L=window.L;
-          const icon=L.divIcon({className:"",
-            html:`<div style="position:relative;width:20px;height:20px">
-              <div style="position:absolute;top:-8px;left:-8px;width:36px;height:36px;border-radius:50%;
-                border:2px solid rgba(74,158,255,0.35);animation:lkPulse 2s ease-out infinite"></div>
-              <div style="width:20px;height:20px;background:#fff;border-radius:50%;
-                border:3px solid #4a9eff;box-shadow:0 2px 8px rgba(0,0,0,0.5)"></div>
-            </div>`,iconSize:[20,20],iconAnchor:[10,10],
-          });
-          userMarkerRef.current=L.marker(ll,{icon,zIndexOffset:1000}).addTo(mapInstance.current);
-        }
-      },
-      (err)=>{
-        setGpsStatus(err.code===1?"denied":"unavailable");
-      },
-      {enableHighAccuracy:true,timeout:10000}
-    );
+  async function requestGpsAgain(){
+    try {
+      const location = await getCurrentLocation();
+
+      setGpsStatus("granted");
+      setShowGpsPopup(false);
+
+      const ll = [location.lat, location.lng];
+
+      setUserLocation({
+        lat: location.lat,
+        lng: location.lng
+      });
+
+      if(mapInstance.current){
+        mapInstance.current.setView(ll,16);
+      }
+
+      if(userMarkerRef.current){
+        userMarkerRef.current.setLatLng(ll);
+      }
+    } catch(err){
+      console.error("GPS request failed:", err);
+      setGpsStatus("denied");
+      setShowGpsPopup(true);
+    }
   }
 
   const openReqs=checkRequests.filter(r=>r.status==="pending");

@@ -12,7 +12,7 @@ export async function requestLocationPermission() {
 
     return request.location === 'granted'
   } catch (err) {
-    console.error('Permission error:', err)
+    console.error('Location permission error:', err)
     return false
   }
 }

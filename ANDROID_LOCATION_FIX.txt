@@ -1,0 +1,29 @@
+ANDROID GPS FIX APPLIED
+
+Changes included:
+- Added Capacitor Geolocation support
+- Added runtime permission handling
+- Fixed floating GPS recenter button
+- Added location service helper
+- Patched MapPage.jsx
+
+Next steps:
+
+1. Install dependencies
+   npm install
+
+2. Generate Android project
+   npx cap add android
+
+3. Sync Capacitor
+   npx cap sync android
+
+4. Build app
+   npm run build
+
+5. Open Android Studio
+   npx cap open android
+
+IMPORTANT:
+You still need the generated android/ folder locally.
+It was not included in your uploaded ZIP.
