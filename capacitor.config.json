@@ -1,0 +1,12 @@
+{
+  "appId": "com.lannkyaung.app",
+  "appName": "Lann Kyaing",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true,
+    "webContentsDebuggingEnabled": false
+  }
+}
