@@ -1,0 +1,120 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ─────────────────────────────────────────────
+      # 1. Checkout
+      # ─────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ─────────────────────────────────────────────
+      # 2. Setup Node.js
+      # ─────────────────────────────────────────────
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # ─────────────────────────────────────────────
+      # 3. Setup Java
+      # ─────────────────────────────────────────────
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # ─────────────────────────────────────────────
+      # 4. Create .env
+      # ─────────────────────────────────────────────
+      - name: Create .env
+        run: |
+          echo "VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}" > .env
+          echo "VITE_SUPABASE_ANON=${{ secrets.VITE_SUPABASE_ANON }}" >> .env
+          echo "VITE_TELEGRAM_BOT_TOKEN=${{ secrets.VITE_TELEGRAM_BOT_TOKEN }}" >> .env
+          echo "VITE_TELEGRAM_CHAT_ID=${{ secrets.VITE_TELEGRAM_CHAT_ID }}" >> .env
+
+      # ─────────────────────────────────────────────
+      # 5. Install dependencies
+      # ─────────────────────────────────────────────
+      - name: Install dependencies
+        run: npm install
+
+      # ─────────────────────────────────────────────
+      # 6. Build Vite app
+      # ─────────────────────────────────────────────
+      - name: Build web app
+        run: npm run build
+
+      # ─────────────────────────────────────────────
+      # 7. Initialize Capacitor
+      # ─────────────────────────────────────────────
+      - name: Init Capacitor
+        run: |
+          if [ ! -f "capacitor.config.ts" ] && [ ! -f "capacitor.config.json" ]; then
+            npx cap init "Lann Kyaung" "com.lannkyaung.app" --web-dir dist
+          fi
+
+      # ─────────────────────────────────────────────
+      # 8. Add Android platform
+      # ─────────────────────────────────────────────
+      - name: Add Android platform
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+
+      # ─────────────────────────────────────────────
+      # 9. Sync Capacitor
+      # ─────────────────────────────────────────────
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      # ─────────────────────────────────────────────
+      # 10. Add Android GPS permissions
+      # ─────────────────────────────────────────────
+      - name: Add Android location permissions
+        run: |
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+
+          grep -q "ACCESS_FINE_LOCATION" $MANIFEST || sed -i '/<manifest/a\
+          <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\
+          <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' $MANIFEST
+
+      # ─────────────────────────────────────────────
+      # 11. Grant Gradle permissions
+      # ─────────────────────────────────────────────
+      - name: Grant Gradle permissions
+        run: chmod +x android/gradlew
+
+      # ─────────────────────────────────────────────
+      # 12. Build Debug APK
+      # ─────────────────────────────────────────────
+      - name: Build Debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      # ─────────────────────────────────────────────
+      # 13. Upload APK
+      # ─────────────────────────────────────────────
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: lann-kyaung-debug-${{ github.run_number }}.apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
