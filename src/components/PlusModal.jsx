@@ -69,9 +69,14 @@ export default function PlusModal({ onClose }) {
   const balance   = userDoc?.balance_credits ?? 0;
   const canAfford = balance >= finalCredits;
 
-  // Derived from adminConfig — falls back to hardcoded defaults if config not loaded
+  // Derived variables from adminConfig with safe fallbacks
   const TIP_AMOUNT_LIVE = Number(adminConfig?.tip_amount || TIP_AMOUNT); 
   const EXPIRY_HOURS    = Number(adminConfig?.pin_expiry_hours || 24);
+
+  // Safe evaluations to prevent the crashes
+  const COMMISSION_RATE = Number(adminConfig?.commission_pct || adminConfig?.tip_commission_rate || 0.20);
+  const COMMISSION_PCT  = Math.round(COMMISSION_RATE * 100);
+  const RECEIVER_GETS   = Math.round(TIP_AMOUNT_LIVE - (TIP_AMOUNT_LIVE * COMMISSION_RATE));
 
   // On mount
   useEffect(()=>{
@@ -153,7 +158,6 @@ export default function PlusModal({ onClose }) {
     if(!savedPinLoc) return alert("Please select a location first");
     if(pinMode==="tip" && !mediaFile) return alert("Please attach a photo or video to enable tips");
     
-    // DEBUG: check expiry hours
     if (!EXPIRY_HOURS) {
       console.error("DEBUG: EXPIRY_HOURS is missing!", adminConfig);
       return alert("System Error: Pin expiry hours not found. Please contact admin.");
@@ -191,7 +195,7 @@ export default function PlusModal({ onClose }) {
   async function handleCheckRequest(){
     if(!savedReqLoc) return alert("Please select a target location");
     if(!canAfford){
-      alert(`Not enough credits.\n\nBalance: ${balance} pts\nCost: ${finalCredits} pts\n\nContact @@dx0dev on Telegram to top up.`);
+      alert(`Not enough credits.\n\nBalance: ${balance} pts\nCost: ${finalCredits} pts\n\nContact @dx0dev on Telegram to top up.`);
       return;
     }
     setLoading(true);
@@ -270,7 +274,7 @@ export default function PlusModal({ onClose }) {
                 {gpsLoading?"⌛ Getting...":"📍 Use GPS"}
               </LocBtn>
               <LocBtn purple active={pinSource==="map"} onClick={()=>pickOnMap("pin")}>
-                🗺️ {pinSource==="map"?"Map ✓":"Pick on map"}
+                {pinSource==="map"?"Map ✓":"Pick on map"}
               </LocBtn>
             </div>
             <LocBox icon={pinSource==="gps"?"📍":"🗺️"}
@@ -355,7 +359,7 @@ export default function PlusModal({ onClose }) {
               {loading?(mediaFile?"Uploading...":"Posting..."):"Post warning pin"}
             </button>
             <p style={{textAlign:"center",color:"#444",fontSize:10,marginTop:8,marginBottom:4}}>
-              Pin expires automatically after 24 hours
+              Pin expires automatically after {EXPIRY_HOURS} hours
             </p>
           </div>
         )}
@@ -445,7 +449,7 @@ export default function PlusModal({ onClose }) {
                     onClick={e=>e.stopPropagation()} style={{
                       display:"block",textAlign:"center",background:"#0088cc",
                       borderRadius:8,padding:"8px",color:"#fff",fontSize:12,fontWeight:700,textDecoration:"none",
-                    }}>📱 Contact @@dx0dev</a>
+                    }}>📱 Contact @dx0dev</a>
                 </div>
               )}
             </div>
