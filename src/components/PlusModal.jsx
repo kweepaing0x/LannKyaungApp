@@ -69,6 +69,10 @@ export default function PlusModal({ onClose }) {
   const balance   = userDoc?.balance_credits ?? 0;
   const canAfford = balance >= finalCredits;
 
+  // Derived from adminConfig — falls back to hardcoded defaults if config not loaded
+  const TIP_AMOUNT_LIVE = adminConfig?.tip_amount       ?? TIP_AMOUNT; // 25 pts
+  const EXPIRY_HOURS    = adminConfig?.pin_expiry_hours ?? 24;         // 24 hrs
+
   // On mount
   useEffect(()=>{
     if(userLocation && !savedPinLoc){ setSavedPinLoc(userLocation); setPinSource("gps"); }
@@ -180,7 +184,7 @@ export default function PlusModal({ onClose }) {
   async function handleCheckRequest(){
     if(!savedReqLoc) return alert("Please select a target location");
     if(!canAfford){
-      alert(`Not enough credits.\n\nBalance: ${balance} pts\nCost: ${finalCredits} pts\n\nContact @doublepz Yet on Telegram to top up.`);
+      alert(`Not enough credits.\n\nBalance: ${balance} pts\nCost: ${finalCredits} pts\n\nContact @@dx0dev on Telegram to top up.`);
       return;
     }
     setLoading(true);
@@ -430,11 +434,11 @@ export default function PlusModal({ onClose }) {
                 <div style={{marginTop:12,background:"rgba(226,75,74,0.1)",borderRadius:10,padding:"10px 12px"}}>
                   <div style={{color:"#e24b4a",fontSize:12,fontWeight:700,marginBottom:4}}>⚠️ Not enough credits</div>
                   <div style={{color:"#999",fontSize:11,lineHeight:1.6,marginBottom:8}}>Need {finalCredits-balance} more pts.</div>
-                  <a href="https://t.me/doublepzYet" target="_blank" rel="noreferrer"
+                  <a href="https://t.me/dx0dev" target="_blank" rel="noreferrer"
                     onClick={e=>e.stopPropagation()} style={{
                       display:"block",textAlign:"center",background:"#0088cc",
                       borderRadius:8,padding:"8px",color:"#fff",fontSize:12,fontWeight:700,textDecoration:"none",
-                    }}>📱 Contact @doublepz Yet</a>
+                    }}>📱 Contact @@dx0dev</a>
                 </div>
               )}
             </div>
