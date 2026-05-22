@@ -57,6 +57,21 @@ jobs:
       - name: Sync Capacitor Android
         run: npx cap sync android
 
+        - name: Add Android permissions and link icons
+        run: |
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          
+          # 1. Add Location permissions if missing
+          grep -q "ACCESS_FINE_LOCATION" $MANIFEST || \
+          sed -i '/<manifest/a\    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" \/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" \/>' $MANIFEST
+          
+          # 2. Force the application tag to explicitly use our mipmap assets
+          sed -i 's|android:icon="[^"]*"|android:icon="@mipmap/ic_launcher"|g' $MANIFEST
+          sed -i 's|android:roundIcon="[^"]*"|android:roundIcon="@mipmap/ic_launcher_round"|g' $MANIFEST
+          
+          echo "Manifest permissions and icons linked:"
+          grep -E "icon|roundIcon" $MANIFEST
+
      # ── Copy app icons into Android project ──────────────────
       - name: Set app icons
         run: |
