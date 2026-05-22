@@ -102,12 +102,23 @@ jobs:
           echo "App name set:"
           grep app_name $STRINGS
 
-      - name: Add Android permissions
+      # ─────────────────────────────────────────────
+      # 10. Add Android system permissions and link icons
+      # ─────────────────────────────────────────────
+      - name: Add Android permissions and link icons
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
-          grep -q "ACCESS_FINE_LOCATION" $MANIFEST || \
-          sed -i '/<manifest/a\    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" \/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" \/>' $MANIFEST
-
+          
+          # Inject all native system permissions directly inside the <manifest> tag on the fly
+          grep -q "ACCESS_FINE_LOCATION" $MANIFEST || sed -i '/<manifest/a\    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />\n    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />' $MANIFEST
+          
+          # Explicitly force the application container to link against your custom android-icons
+          sed -i 's|android:icon="[^"]*"|android:icon="@mipmap/ic_launcher"|g' $MANIFEST
+          sed -i 's|android:roundIcon="[^"]*"|android:roundIcon="@mipmap/ic_launcher_round"|g' $MANIFEST
+          
+          echo "Native Android Manifest verified:"
+          grep -E "uses-permission|icon" $MANIFEST
+          
       - name: Grant Gradle permissions
         run: chmod +x android/gradlew
 
