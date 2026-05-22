@@ -186,7 +186,7 @@ export default function PlusModal({ onClose }) {
   async function handleCheckRequest(){
     if(!savedReqLoc) return alert("Please select a target location");
     if(!canAfford){
-      alert(`Not enough credits.\n\nBalance: ${balance} pts\nCost: ${finalCredits} pts\n\nContact @doublepz Yet on Telegram to top up.`);
+      alert(`Not enough credits.\n\nBalance: ${balance} pts\nCost: ${finalCredits} pts\n\nContact @dx0dev on Telegram to top up.`);
       return;
     }
     setLoading(true);
