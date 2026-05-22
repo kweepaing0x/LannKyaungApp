@@ -46,7 +46,7 @@ export default function PinPopup({ pin, onClose }) {
   if (!pin) return null;
 
   // DB column is commission_rate (not tip_commission_rate)
-  const tipAmount      = pin.tip_amount || adminConfig?.tip_amount || 25;
+  const tipAmount      = pin?.tip_amount || adminConfig?.tip_amount || 25;
   const commissionRate = adminConfig?.commission_rate ?? 0.20;
   const receiverGets   = Math.round(tipAmount * (1 - commissionRate));
   const commission     = tipAmount - receiverGets;
@@ -55,11 +55,27 @@ export default function PinPopup({ pin, onClose }) {
   const isTippable     = !!pin.tip_enabled && !isMyPin;
 
   // unlocked = either: not a tip pin, OR it's my own pin, OR already paid
-  const [unlocked,    setUnlocked]    = useState(!isTippable);
-  const [tipLoading,  setTipLoading]  = useState(false);
-  const [tipDone,     setTipDone]     = useState(false);
-  const [showMedia,   setShowMedia]   = useState(false);
+  const [unlocked,       setUnlocked]       = useState(!isTippable);
+  const [checkingUnlock, setCheckingUnlock] = useState(isTippable);
+  const [tipLoading,     setTipLoading]     = useState(false);
+  const [tipDone,        setTipDone]        = useState(false);
+  const [showMedia,      setShowMedia]      = useState(false);
 
+  // Check if already tipped on mount
+  useEffect(() => {
+    if (!isTippable || !user?.id) {
+      setCheckingUnlock(false);
+      return;
+    }
+    checkAlreadyTipped(user.id, pin.id)
+      .then(alreadyTipped => {
+        if (alreadyTipped) {
+          setUnlocked(true);
+        }
+      })
+      .catch(err => console.error("checkAlreadyTipped error:", err))
+      .finally(() => setCheckingUnlock(false));
+  }, [pin.id, user?.id, isTippable]);
 
   const maskedUser = maskEmail(pin.posted_by_email);
   const timeStr    = formatMMT(pin.posted_at);
