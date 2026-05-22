@@ -1,6 +1,6 @@
 {
   "appId": "com.lannkyaung.app",
-  "appName": "Lann Kyaing",
+  "appName": "Lann Kyaung",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"
