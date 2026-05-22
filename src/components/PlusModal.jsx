@@ -25,12 +25,11 @@ const TIME_WINDOWS = [
 ];
 const CUSTOM_HOURS     = [1,2,3,4,5,6,7,8];
 const CREDITS_PER_HOUR = 180;
-const TIP_AMOUNT       = 25;
+const TIP_AMOUNT       = 25; // fallback only
 
 export default function PlusModal({ onClose }) {
   const {
-    user, userDoc, setUserDoc,
-    adminConfig,
+    user, userDoc, setUserDoc, adminConfig,
     userLocation, setUserLocation,
     setShowPlusModal,
     setPickingLocation,
@@ -41,12 +40,6 @@ export default function PlusModal({ onClose }) {
     savedPinLoc, setSavedPinLoc,
     savedReqLoc, setSavedReqLoc,
   } = useAppStore();
-
-  // Fix 2: read tip amount and commission from adminConfig, not hardcoded const
-  const TIP_AMOUNT_LIVE    = adminConfig?.tip_amount      || TIP_AMOUNT;
-  const COMMISSION_RATE    = adminConfig?.commission_rate  ?? 0.20;
-  const RECEIVER_GETS      = Math.round(TIP_AMOUNT_LIVE * (1 - COMMISSION_RATE));
-  const COMMISSION_PCT     = Math.round(COMMISSION_RATE * 100);
 
   const [mode,        setMode]        = useState("update");
   const [selType,     setSelType]     = useState("police");
@@ -176,6 +169,7 @@ export default function PlusModal({ onClose }) {
         isPaidPin: tipEnabled,
         tipEnabled,
         tipAmount: tipEnabled ? TIP_AMOUNT_LIVE : null,
+        expiryHours: EXPIRY_HOURS,
       });
       setSavedPinLoc(null); setPinSource(null);
       setShowPlusModal(false);
@@ -186,7 +180,7 @@ export default function PlusModal({ onClose }) {
   async function handleCheckRequest(){
     if(!savedReqLoc) return alert("Please select a target location");
     if(!canAfford){
-      alert(`Not enough credits.\n\nBalance: ${balance} pts\nCost: ${finalCredits} pts\n\nContact @dx0dev on Telegram to top up.`);
+      alert(`Not enough credits.\n\nBalance: ${balance} pts\nCost: ${finalCredits} pts\n\nContact @doublepz Yet on Telegram to top up.`);
       return;
     }
     setLoading(true);
