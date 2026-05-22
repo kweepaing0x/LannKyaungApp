@@ -8,16 +8,66 @@ import MapPage     from "./pages/MapPage";
 import ProfilePage from "./pages/ProfilePage";
 import PlusModal   from "./components/PlusModal";
 
+// ── IMPORT ADMOB EXTENSIONS ─────────────────────────────────
+import { AdMob, InterstitialAdPluginEvents } from "@capacitor-community/admob";
+
 export default function App() {
   const { t } = useTranslation();
   const { user, setUser, setUserDoc, setAdminConfig, setSituationTypes,
     activeTab, setActiveTab, showPlusModal, setShowPlusModal } = useAppStore();
   const [ready, setReady] = useState(false);
 
+  // ── ADMOB INITIALIZATION & PRELOAD SYSTEM ───────────────────
+  useEffect(() => {
+    // 1. Initialize core engine context
+    AdMob.initialize().catch((err) => console.error("AdMob Init Failed:", err));
+
+    // 2. Loop preloader: Cache a new asset vector instantly when the current one closes
+    const dismissListener = AdMob.addListener(
+      InterstitialAdPluginEvents.Closed,
+      () => {
+        console.log("Interstitial closed. Preloading the next asset hook...");
+        preloadInterstitial();
+      }
+    );
+
+    // Warm up the initial ad instance container
+    preloadInterstitial();
+
+    return () => {
+      dismissListener.remove();
+    };
+  }, []);
+
+  const preloadInterstitial = async () => {
+    try {
+      await AdMob.prepareInterstitial({
+        adId: "ca-app-pub-4379269817546913/1770419841", // Production ID
+        isTesting: true, // ⚠️ Keep TRUE while installing directly via your phone
+      });
+      console.log("✅ Interstitial preloaded successfully.");
+    } catch (error) {
+      console.error("❌ Interstitial preload failure:", error);
+    }
+  };
+
+  const handlePlusButtonClick = async () => {
+    // Route navigation view container state
+    setActiveTab("map");
+    setShowPlusModal(true);
+
+    // Trigger full-screen ad break over the top layer seamlessly
+    try {
+      await AdMob.showInterstitial();
+    } catch (error) {
+      console.warn("Ad asset skipped or structural loading incomplete:", error);
+    }
+  };
+  // ────────────────────────────────────────────────────────────
+
   useEffect(() => {
     if (!isConfigured) { setReady(true); return; }
 
-    // Safety net — never hang more than 8s
     const timeout = setTimeout(() => setReady(true), 8000);
 
     const unsub = onAuthChange(async (u) => {
@@ -56,8 +106,10 @@ export default function App() {
       }}>
         <TabBtn active={activeTab==="map"} icon="ti-map-pin"
           label={t("tabs.checkpoints")} onClick={()=>setActiveTab("map")}/>
+        
+        {/* Central Interception Node: Triggers Ad + Action Display Layout */}
         <div style={{flex:1,display:"flex",justifyContent:"center"}}>
-          <button onClick={()=>{setActiveTab("map");setShowPlusModal(true);}} style={{
+          <button onClick={handlePlusButtonClick} style={{
             width:54,height:54,borderRadius:"50%",
             background:"linear-gradient(135deg,#e24b4a,#ff6b35)",
             border:"3px solid #0d0d0d",
@@ -68,6 +120,7 @@ export default function App() {
             <i className="ti ti-plus" style={{fontSize:28,color:"#fff"}} aria-hidden="true"/>
           </button>
         </div>
+
         <TabBtn active={activeTab==="profile"} icon="ti-user-circle"
           label={t("tabs.profile")} onClick={()=>setActiveTab("profile")}/>
       </nav>
