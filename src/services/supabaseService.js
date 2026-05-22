@@ -79,18 +79,59 @@ export async function updateUserDoc(uid,updates) {
 }
 
 // ── ADMIN CONFIG ──────────────────────────────────────────────
+// Always returns a usable config — never null — so the app works
+// even if the admin_config table is empty or RLS blocks the read
+const DEFAULT_ADMIN_CONFIG = {
+  commission_rate:       0.10,
+  tip_commission_rate:   0.20,
+  tip_amount:            25,
+  pin_expiry_hours:      24,
+  pin_history_days:      7,
+  map_delay_seconds:     1800,
+  checker_radius_km:     2.0,
+  maintenance_mode:      false,
+  contact_telegram:      "@dx0dev",
+  default_language:      "my",
+};
+
 export async function getAdminConfig() {
-  if (!isConfigured||!supabase) return null;
-  const {data} = await supabase.from("admin_config").select("*").maybeSingle();
-  return data;
+  if (!isConfigured || !supabase) return DEFAULT_ADMIN_CONFIG;
+  try {
+    const { data, error } = await supabase
+      .from("admin_config")
+      .select("*")
+      .maybeSingle();
+    if (error) { console.warn("getAdminConfig error:", error.message); return DEFAULT_ADMIN_CONFIG; }
+    // Merge with defaults so missing columns don't break anything
+    return { ...DEFAULT_ADMIN_CONFIG, ...(data || {}) };
+  } catch(e) {
+    console.warn("getAdminConfig failed:", e.message);
+    return DEFAULT_ADMIN_CONFIG;
+  }
 }
 
 // ── SITUATION TYPES ───────────────────────────────────────────
+const FALLBACK_SITUATION_TYPES = [
+  {id:"police",  emoji:"🚔", label_my:"ရဲ ရှိသည်",    label_en:"Police",       color:"#E24B4A", severity:3, is_active:true},
+  {id:"blocked", emoji:"🚧", label_my:"လမ်းပိတ်",      label_en:"Road blocked", color:"#EF9F27", severity:3, is_active:true},
+  {id:"traffic", emoji:"🚗", label_my:"လမ်းကြပ်",      label_en:"Traffic",      color:"#EF9F27", severity:2, is_active:true},
+  {id:"danger",  emoji:"⚠️", label_my:"အန္တရာယ်",    label_en:"Danger",       color:"#E24B4A", severity:3, is_active:true},
+  {id:"flood",   emoji:"🌊", label_my:"ရေကြီး",        label_en:"Flood",        color:"#378ADD", severity:3, is_active:true},
+  {id:"repair",  emoji:"🔧", label_my:"လမ်းပြုပြင်", label_en:"Repair",       color:"#888780", severity:1, is_active:true},
+  {id:"event",   emoji:"🎉", label_my:"အခမ်းအနား",    label_en:"Event",        color:"#534AB7", severity:1, is_active:true},
+  {id:"other",   emoji:"❓", label_my:"အခြား",         label_en:"Other",        color:"#888780", severity:1, is_active:true},
+];
+
 export async function getSituationTypes() {
-  if (!isConfigured||!supabase) return null;
-  const {data} = await supabase.from("situation_types").select("*")
-    .eq("is_active",true).order("severity",{ascending:false});
-  return data;
+  if (!isConfigured || !supabase) return FALLBACK_SITUATION_TYPES;
+  try {
+    const { data, error } = await supabase.from("situation_types").select("*")
+      .eq("is_active", true).order("severity", { ascending: false });
+    if (error || !data?.length) return FALLBACK_SITUATION_TYPES;
+    return data;
+  } catch(e) {
+    return FALLBACK_SITUATION_TYPES;
+  }
 }
 
 // ── MEDIA UPLOAD ──────────────────────────────────────────────
