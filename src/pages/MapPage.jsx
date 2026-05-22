@@ -2,13 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "../store";
 import { subscribePins, subscribeCheckRequests, subscribeHistoryPins } from "../services/supabaseService";
 import PinPopup from "../components/PinPopup";
-import { getCurrentLocation } from "../services/locationService";
+import { requestGPSPermission, watchPos, getCurrentPos } from "../services/gpsService";
 
-const PIN_COLORS = {
-  police:"#E24B4A",blocked:"#EF9F27",traffic:"#EF9F27",
-  danger:"#E24B4A",flood:"#378ADD",repair:"#888780",
-  event:"#534AB7",other:"#888780",
-};
+// PIN_COLORS removed — colors and emojis now come from situation_types DB table
 
 function PickCrosshair(){
   return(
@@ -41,6 +37,7 @@ export default function MapPage(){
     setPickedLocation,
     pendingPickTarget,
     userDoc,adminConfig,
+    situationTypes,
   } = useAppStore();
 
   const [mapReady,setMapReady]       = useState(false);
@@ -66,12 +63,17 @@ export default function MapPage(){
       }).addTo(map);
       mapInstance.current=map;
       setMapReady(true);
-      if(navigator.geolocation){
-        navigator.geolocation.watchPosition((pos)=>{
+      // Request native GPS permission first, then start watching
+      requestGPSPermission().then(permission => {
+        if(permission === "denied"){
+          setGpsStatus("denied");
+          setShowGpsPopup(true);
+          return;
+        }
+        const placeMarker = (ll) => {
           setGpsStatus("granted");
           setShowGpsPopup(false);
-          const ll=[pos.coords.latitude,pos.coords.longitude];
-          setUserLocation({lat:pos.coords.latitude,lng:pos.coords.longitude});
+          setUserLocation({lat:ll[0],lng:ll[1]});
           if(userMarkerRef.current){
             userMarkerRef.current.setLatLng(ll);
           } else {
@@ -86,11 +88,15 @@ export default function MapPage(){
             userMarkerRef.current=L.marker(ll,{icon,zIndexOffset:1000}).addTo(map);
             map.setView(ll,15);
           }
-        },(err)=>{
-          setGpsStatus(err.code===1?"denied":"unavailable");
-          setShowGpsPopup(true);
-        },{enableHighAccuracy:true,timeout:10000});
-      }
+        };
+        watchPos(
+          ({lat,lng}) => placeMarker([lat,lng]),
+          (err)  => {
+            setGpsStatus(err?.code===1?"denied":"unavailable");
+            setShowGpsPopup(true);
+          }
+        );
+      });
     };
     if(window.L) init();
     else{const id=setInterval(()=>{if(window.L){clearInterval(id);init();}},100);return()=>clearInterval(id);}
@@ -149,38 +155,52 @@ export default function MapPage(){
     markersRef.current=[];
     const all=showHistory?[...pins,...historyPins]:pins;
     all.forEach(pin=>{
-      const color=PIN_COLORS[pin.type]||"#888";
-      const hist=!!pin.is_history;
-      const sz=hist?10:20;
-      const hasTip = pin.tip_enabled && !hist;
+      const hist = !!pin.is_history;
+      const hasTip = !!pin.tip_enabled && !hist;
+
+      // Look up type from DB situation_types, fallback to pin fields
+      const typeInfo = situationTypes?.find(t => t.id === pin.type);
+      const emoji    = pin.emoji || typeInfo?.emoji || "📍";
+      const color    = typeInfo?.color || "#888780";
+
       const icon = hasTip
         ? L.divIcon({
             className:"",
             html:`<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer">
               <div style="
                 background:linear-gradient(135deg,#e24b4a,#EF9F27);
-                border-radius:20px;padding:3px 7px 3px 5px;
+                border-radius:20px;padding:3px 8px 3px 6px;
                 border:2px solid rgba(255,255,255,0.8);
                 box-shadow:0 3px 12px rgba(239,159,39,0.6);
-                display:flex;align-items:center;gap:3px;
+                display:flex;align-items:center;gap:4px;
                 white-space:nowrap;
               ">
-                <span style="font-size:11px;line-height:1">☕</span>
+                <span style="font-size:14px;line-height:1">${emoji}</span>
                 <span style="color:#fff;font-size:10px;font-weight:800;letter-spacing:0.5px">??</span>
               </div>
               <div style="width:2px;height:6px;background:#EF9F27;border-radius:0 0 2px 2px;margin-top:-1px"></div>
               <div style="width:6px;height:3px;background:rgba(0,0,0,0.3);border-radius:50%"></div>
             </div>`,
-            iconSize:[52,30], iconAnchor:[26,36],
+            iconSize:[60,32], iconAnchor:[30,38],
           })
         : L.divIcon({
             className:"",
             html:`<div style="
-              width:${sz}px;height:${sz}px;background:${color};border-radius:50%;
-              border:2.5px solid rgba(255,255,255,${hist?.2:.7});opacity:${hist?.4:1};
-              box-shadow:0 0 ${hist?3:10}px ${color}${hist?"33":"99"};cursor:pointer">
+              display:flex;flex-direction:column;align-items:center;
+              cursor:pointer;opacity:${hist?0.5:1};
+            ">
+              <div style="
+                width:${hist?28:36}px;height:${hist?28:36}px;
+                background:${hist?"rgba(40,40,40,0.9)":"rgba(20,20,20,0.92)"};
+                border-radius:50%;
+                border:2px solid ${hist?"rgba(255,255,255,0.15)":color};
+                display:flex;align-items:center;justify-content:center;
+                font-size:${hist?12:18}px;
+                box-shadow:${hist?"none":"0 2px 12px "+color+"66"};
+              ">${emoji}</div>
+              ${hist?"":"<div style='width:2px;height:5px;background:"+color+";border-radius:0 0 2px 2px;margin-top:-1px'></div><div style='width:6px;height:3px;background:rgba(0,0,0,0.3);border-radius:50%'></div>"}
             </div>`,
-            iconSize:[sz,sz], iconAnchor:[sz/2,sz/2],
+            iconSize:[hist?28:36, hist?28:44], iconAnchor:[hist?14:18, hist?14:44],
           });
       const m=L.marker([pin.lat,pin.lng],{icon}).addTo(mapInstance.current)
         .on("click",()=>setSelectedPin(pin));
@@ -188,56 +208,41 @@ export default function MapPage(){
     });
   },[pins,historyPins,mapReady,showHistory]);
 
-  async function centerOnUser(){
-    try {
-      const location = await getCurrentLocation();
-
-      setGpsStatus("granted");
-      setShowGpsPopup(false);
-
-      setUserLocation({
-        lat: location.lat,
-        lng: location.lng
-      });
-
-      if(mapInstance.current){
-        mapInstance.current.setView(
-          [location.lat, location.lng],
-          16
-        );
-      }
-    } catch(err){
-      console.error("GPS error:", err);
+  function centerOnUser(){
+    if(userLocation&&mapInstance.current){
+      mapInstance.current.setView([userLocation.lat,userLocation.lng],16);
+    } else {
       setShowGpsPopup(true);
-      setGpsStatus("denied");
     }
   }
 
   async function requestGpsAgain(){
-    try {
-      const location = await getCurrentLocation();
-
+    setGpsStatus("pending");
+    try{
+      const perm = await requestGPSPermission();
+      if(perm==="denied"){ setGpsStatus("denied"); return; }
+      const {lat,lng} = await getCurrentPos();
       setGpsStatus("granted");
       setShowGpsPopup(false);
-
-      const ll = [location.lat, location.lng];
-
-      setUserLocation({
-        lat: location.lat,
-        lng: location.lng
-      });
-
-      if(mapInstance.current){
-        mapInstance.current.setView(ll,16);
-      }
-
+      const ll=[lat,lng];
+      setUserLocation({lat,lng});
+      if(mapInstance.current) mapInstance.current.setView(ll,16);
+      const L=window.L;
       if(userMarkerRef.current){
         userMarkerRef.current.setLatLng(ll);
+      } else {
+        const icon=L.divIcon({className:"",
+          html:`<div style="position:relative;width:20px;height:20px">
+            <div style="position:absolute;top:-8px;left:-8px;width:36px;height:36px;border-radius:50%;
+              border:2px solid rgba(74,158,255,0.35);animation:lkPulse 2s ease-out infinite"></div>
+            <div style="width:20px;height:20px;background:#fff;border-radius:50%;
+              border:3px solid #4a9eff;box-shadow:0 2px 8px rgba(0,0,0,0.5)"></div>
+          </div>`,iconSize:[20,20],iconAnchor:[10,10],
+        });
+        userMarkerRef.current=L.marker(ll,{icon,zIndexOffset:1000}).addTo(mapInstance.current);
       }
     } catch(err){
-      console.error("GPS request failed:", err);
-      setGpsStatus("denied");
-      setShowGpsPopup(true);
+      setGpsStatus(err?.code===1?"denied":"unavailable");
     }
   }
 
@@ -384,8 +389,8 @@ export default function MapPage(){
               </div>
               <div style={{color:"#666",fontSize:12,lineHeight:1.6,maxWidth:280,margin:"0 auto"}}>
                 {gpsStatus==="denied"
-                  ? `You blocked location access. To enable:
-Settings → Browser → Location → Allow`
+                  ? "You blocked location access. To enable:
+Settings → Browser → Location → Allow"
                   : gpsStatus==="unavailable"
                   ? "GPS is not available on this device or connection."
                   : "Waiting for GPS signal..."}
