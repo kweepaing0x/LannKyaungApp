@@ -57,18 +57,43 @@ jobs:
       - name: Sync Capacitor Android
         run: npx cap sync android
 
-      # ── Copy app icons into Android project ──────────────────
+     # ── Copy app icons into Android project ──────────────────
       - name: Set app icons
         run: |
           RES=android/app/src/main/res
+          
           for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             mkdir -p $RES/mipmap-$density
-            cp android-icons/mipmap-$density/ic_launcher.png       $RES/mipmap-$density/ic_launcher.png
-            cp android-icons/mipmap-$density/ic_launcher_round.png  $RES/mipmap-$density/ic_launcher_round.png
+            
+            # Find the standard/square icon (handles lowercase, uppercase, or alternate names)
+            SRC_SQUARE=$(find android-icons/mipmap-$density -type f \( -name "*ic_launcher.png" -o -name "*launcher.png" -o -name "*icon.png" \) | head -n 1)
+            if [ -n "$SRC_SQUARE" ]; then
+              cp "$SRC_SQUARE" $RES/mipmap-$density/ic_launcher.png
+            fi
+            
+            # Find the round icon (handles round, circle, or fallback to square if round is missing)
+            SRC_ROUND=$(find android-icons/mipmap-$density -type f \( -name "*round*" -o -name "*circle*" \) | head -n 1)
+            if [ -n "$SRC_ROUND" ]; then
+              cp "$SRC_ROUND" $RES/mipmap-$density/ic_launcher_round.png
+            else
+              # Fallback: If the tool didn't generate a round icon, use the square one so it doesn't crash!
+              if [ -n "$SRC_SQUARE" ]; then
+                cp "$SRC_SQUARE" $RES/mipmap-$density/ic_launcher_round.png
+              fi
+            fi
           done
-          cp android-icons/mipmap-xxxhdpi/ic_launcher_foreground.png $RES/mipmap-xxxhdpi/ic_launcher_foreground.png
-          echo "Icons copied successfully"
-
+          
+          # Handle the special foreground icon inside the xxxhdpi block
+          SRC_FOREGROUND=$(find android-icons/mipmap-xxxhdpi -type f \( -name "*foreground*" -o -name "*fg*" \) | head -n 1)
+          if [ -n "$SRC_FOREGROUND" ]; then
+            cp "$SRC_FOREGROUND" $RES/mipmap-xxxhdpi/ic_launcher_foreground.png
+          else
+            # Fallback to standard icon if foreground is completely missing
+            cp $RES/mipmap-xxxhdpi/ic_launcher.png $RES/mipmap-xxxhdpi/ic_launcher_foreground.png
+          fi
+          
+          echo "Icons parsed and copied successfully!"
+          
       # ── Fix app label to "Lann Kyaung" ───────────────────────
       - name: Set app name
         run: |
