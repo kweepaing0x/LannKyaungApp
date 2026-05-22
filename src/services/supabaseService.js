@@ -126,9 +126,8 @@ export function subscribeHistoryPins(callback, historyDays=7) {
     .lte("expires_at", new Date().toISOString())
     .gte("expires_at", dayjs().subtract(historyDays,"day").toISOString())
     .order("posted_at",{ascending:false})
-    .then(({data, error})=>{
-      if (error) { console.error("subscribeHistoryPins error:", error.message); callback([]); return; }
-      console.log("subscribeHistoryPins: loaded", data?.length, "history pins");
+    .then(({data,error})=>{
+      if(error){ console.error("subscribeHistoryPins:",error.message); callback([]); return; }
       callback((data||[]).map(p=>({...p,is_history:true})));
     });
   return ()=>{};
@@ -164,38 +163,26 @@ export async function postPin({
   if (error) throw error;
 }
 
-// ── TIP A PIN POSTER ──────────────────────────────────────────
-
-// ── CHECK IF USER ALREADY TIPPED A PIN (double-tip guard) ────
+// ── CHECK IF ALREADY TIPPED (double-tip guard) ───────────────
 export async function checkAlreadyTipped(fromUid, pinId) {
   if (!isConfigured||!supabase) return false;
-  const { data } = await supabase
-    .from("transactions")
-    .select("id")
-    .eq("uid", fromUid)
-    .eq("type", "tip_sent")
-    .eq("ref_id", pinId)
-    .limit(1);
+  const {data} = await supabase.from("transactions")
+    .select("id").eq("uid",fromUid).eq("type","tip_sent").eq("ref_id",pinId).limit(1);
   return (data?.length ?? 0) > 0;
 }
 
+// ── TIP A PIN POSTER ──────────────────────────────────────────
 export async function sendTip({ fromUid, toUid, pinId, tipAmount, commissionRate=0.20 }) {
   guard();
   const now = new Date();
 
-  // 0. Server-side double-tip guard — prevents paying twice for same pin
-  const { data: existingTip } = await supabase
-    .from("transactions")
-    .select("id")
-    .eq("uid", fromUid)
-    .eq("type", "tip_sent")
-    .eq("ref_id", pinId)
-    .limit(1);
-  if (existingTip?.length > 0)
-    throw new Error("You have already tipped this pin.");
+  // 0. Double-tip guard
+  const {data:existing} = await supabase.from("transactions")
+    .select("id").eq("uid",fromUid).eq("type","tip_sent").eq("ref_id",pinId).limit(1);
+  if (existing?.length > 0) throw new Error("You have already tipped this pin.");
 
-  // 1. Check sender own balance (RLS allows own row)
-  const {data:sender, error:se} = await supabase
+  // 1. Check sender balance
+  const {data:sender,error:se} = await supabase
     .from("users").select("balance_credits,total_spent").eq("uid",fromUid).single();
   if (se) throw new Error("Could not fetch your balance");
   if ((sender.balance_credits||0) < tipAmount)
@@ -205,40 +192,28 @@ export async function sendTip({ fromUid, toUid, pinId, tipAmount, commissionRate
   const commission   = Math.round(tipAmount * commissionRate);
   const receiverGets = tipAmount - commission;
 
-  // 3. Deduct from sender (own row — RLS OK)
+  // 3. Deduct from sender
   const {error:de} = await supabase.from("users")
-    .update({
-      balance_credits: sender.balance_credits - tipAmount,
-      total_spent:     (sender.total_spent||0) + tipAmount,
-    })
+    .update({ balance_credits: sender.balance_credits - tipAmount, total_spent: (sender.total_spent||0) + tipAmount })
     .eq("uid",fromUid);
   if (de) throw new Error("Failed to deduct balance: " + de.message);
 
-  // 4. Credit receiver via RPC (SECURITY DEFINER bypasses RLS)
-  //    If RPC returns 400, the function isn't created yet — run fix_rpc.sql
-  const {data:rpcData, error:re} = await supabase.rpc("increment_user_credits", {
-    target_uid:   toUid,
-    credit_delta: receiverGets,
-    earned_delta: receiverGets,
+  // 4. Credit receiver via RPC (bypasses RLS)
+  const {error:re} = await supabase.rpc("increment_user_credits", {
+    target_uid: toUid, credit_delta: receiverGets, earned_delta: receiverGets,
   });
-  console.log("RPC result:", rpcData, "error:", re);
   if (re) {
-    console.error("RPC full error:", JSON.stringify(re));
-    // Rollback sender deduction before throwing
     await supabase.from("users")
-      .update({
-        balance_credits: sender.balance_credits,
-        total_spent:     sender.total_spent || 0,
-      })
+      .update({ balance_credits: sender.balance_credits, total_spent: sender.total_spent||0 })
       .eq("uid", fromUid);
-    throw new Error("Failed to credit poster. Your balance has been restored.\nDetail: " + re.message);
+    throw new Error("Failed to credit poster. Your balance has been restored.");
   }
 
-  // 5. Log transactions (best-effort)
+  // 5. Log transactions
   const txRows = [
-    { uid:fromUid, type:"tip_sent",       amount:-tipAmount,   description:"Tea tip sent",      ref_id:pinId, created_at:now.toISOString() },
-    { uid:toUid,   type:"tip_received",   amount:receiverGets, description:"Tea tip received",  ref_id:pinId, created_at:now.toISOString() },
-    { uid:"admin", type:"tip_commission", amount:commission,   description:"Tip commission",    ref_id:pinId, created_at:now.toISOString() },
+    { uid:fromUid, type:"tip_sent",       amount:-tipAmount,   description:"☕ Tea tip sent",     ref_id:pinId, created_at:now.toISOString() },
+    { uid:toUid,   type:"tip_received",   amount:receiverGets, description:"☕ Tea tip received",  ref_id:pinId, created_at:now.toISOString() },
+    { uid:"admin", type:"tip_commission", amount:commission,   description:"☕ Tip commission",    ref_id:pinId, created_at:now.toISOString() },
   ];
   await supabase.from("transactions").insert(txRows).then(()=>{}).catch(()=>{});
 
