@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAppStore } from "./store";
-import { onAuthChange, getUserDoc, getAdminConfig } from "./services/supabaseService";
+import { onAuthChange, getUserDoc, getAdminConfig, getSituationTypes } from "./services/supabaseService";
 import { isConfigured } from "./supabase";
 import { useTranslation } from "react-i18next";
 import LoginPage   from "./pages/LoginPage";
@@ -10,7 +10,7 @@ import PlusModal   from "./components/PlusModal";
 
 export default function App() {
   const { t } = useTranslation();
-  const { user, setUser, setUserDoc, setAdminConfig,
+  const { user, setUser, setUserDoc, setAdminConfig, setSituationTypes,
     activeTab, setActiveTab, showPlusModal, setShowPlusModal } = useAppStore();
   const [ready, setReady] = useState(false);
 
@@ -25,9 +25,10 @@ export default function App() {
       setUser(u);
       if (u) {
         try {
-          const [uDoc, cfg] = await Promise.all([getUserDoc(u.id), getAdminConfig()]);
+          const [uDoc, cfg, types] = await Promise.all([getUserDoc(u.id), getAdminConfig(), getSituationTypes()]);
           setUserDoc(uDoc);
           setAdminConfig(cfg);
+          if (types?.length) setSituationTypes(types);
         } catch(e) { console.warn("load user:", e.message); }
       }
       setReady(true);
