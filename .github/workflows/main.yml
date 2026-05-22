@@ -98,7 +98,7 @@ jobs:
           
           echo "Modern anydpi overrides removed & PNG icons parsed successfully!"
 
-     # ── Fix app label and append AdMob string resource ───────
+    # ── Fix app label and append AdMob string resource ───────
       - name: Set app name and string configs
         run: |
           STRINGS=android/app/src/main/res/values/strings.xml
@@ -109,14 +109,15 @@ jobs:
           # Clean old injections if running multiple times to avoid duplicates
           sed -i '/name="admob_app_id"/d' $STRINGS
           
-          # SAFETY TRICK: Strip out any accidental trailing carriage returns or hidden spacing characters
+          # SAFETY TRICK: Strip out any accidental trailing spacing characters
           CLEANED_ID=$(echo "${{ secrets.ADMOB_APP_ID_ANDROID }}" | tr -d '\r' | xargs)
           
-          # Safe injection directly right before the closing </resources> tag
-          sed -i "s|</resources>|    <string name="admob_app_id">${CLEANED_ID}</string>\n</resources>|g" $STRINGS
+          # PERFECTED QUOTE INJECTION: Appends cleanly right before closing </resources> tag
+          sed -i 's|</resources>|    <string name="admob_app_id">'${CLEANED_ID}'</string>\n</resources>|g' $STRINGS
           
-          echo "Strings updated check:"
+          echo "Strings updated verification check:"
           cat $STRINGS
+          
       # ── Configure Manifest: Permissions & Fixed AdMob Metadata ──
       - name: Add Android permissions and link configurations
         run: |
