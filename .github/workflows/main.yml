@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-
   workflow_dispatch:
 
 env:
@@ -15,33 +14,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ─────────────────────────────────────────────
-      # 1. Checkout
-      # ─────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ─────────────────────────────────────────────
-      # 2. Setup Node.js
-      # ─────────────────────────────────────────────
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
 
-      # ─────────────────────────────────────────────
-      # 3. Setup Java
-      # ─────────────────────────────────────────────
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      # ─────────────────────────────────────────────
-      # 4. Create .env
-      # ─────────────────────────────────────────────
       - name: Create .env
         run: |
           echo "VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}" > .env
@@ -49,66 +36,41 @@ jobs:
           echo "VITE_TELEGRAM_BOT_TOKEN=${{ secrets.VITE_TELEGRAM_BOT_TOKEN }}" >> .env
           echo "VITE_TELEGRAM_CHAT_ID=${{ secrets.VITE_TELEGRAM_CHAT_ID }}" >> .env
 
-      # ─────────────────────────────────────────────
-      # 5. Install dependencies
-      # ─────────────────────────────────────────────
       - name: Install dependencies
         run: npm install
 
-      # ─────────────────────────────────────────────
-      # 6. Build Vite app
-      # ─────────────────────────────────────────────
       - name: Build web app
         run: npm run build
 
-      # ─────────────────────────────────────────────
-      # 7. Initialize Capacitor
-      # ─────────────────────────────────────────────
       - name: Init Capacitor
         run: |
           if [ ! -f "capacitor.config.ts" ] && [ ! -f "capacitor.config.json" ]; then
             npx cap init "Lann Kyaing" "com.lannkyaung.app" --web-dir dist
           fi
 
-      # ─────────────────────────────────────────────
-      # 8. Add Android platform
-      # ─────────────────────────────────────────────
       - name: Add Android platform
         run: |
           if [ ! -d "android" ]; then
             npx cap add android
           fi
 
-      # ─────────────────────────────────────────────
-      # 9. Sync Capacitor
-      # ─────────────────────────────────────────────
       - name: Sync Capacitor Android
         run: npx cap sync android
 
-      # ─────────────────────────────────────────────
-      # 10. Add Android GPS permissions
-      # ─────────────────────────────────────────────
-      - name: Add Android location permissions
+      - name: Add Android permissions
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
-          grep -q "ACCESS_FINE_LOCATION" $MANIFEST || sed -i '/<manifest/a\
-          <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\
-          <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' $MANIFEST
+          grep -q "ACCESS_FINE_LOCATION" $MANIFEST || \
+          sed -i 's|<manifest|<manifest|;/<manifest/a\    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' $MANIFEST
 
-      # ─────────────────────────────────────────────
-      # 11. Grant Gradle permissions
-      # ─────────────────────────────────────────────
       - name: Grant Gradle permissions
         run: chmod +x android/gradlew
 
-      # ─────────────────────────────────────────────
-      # 12. Generate Keystore & Build Release APK
-      # ─────────────────────────────────────────────
-      - name: Build and Sign Release APK
+      - name: Generate keystore
+        working-directory: android/app
         run: |
-          # Create a secure, standalone keystore directly inside the runner workspace
           keytool -genkey -v \
-            -keystore android/app/lann-kyaung.keystore \
+            -keystore lann-kyaung.keystore \
             -alias lannkyaung \
             -keyalg RSA \
             -keysize 2048 \
@@ -116,18 +78,20 @@ jobs:
             -storepass "LannKyaungSecurePass123" \
             -keypass "LannKyaungSecurePass123" \
             -dname "CN=LannKyaung, OU=App, O=LannKyaung, L=Yangon, S=Yangon, C=MM"
+          echo "Keystore created at: $PWD/lann-kyaung.keystore"
+          ls -la lann-kyaung.keystore
 
-          # Compile the Android production code using the freshly generated key configuration
-          cd android
+      - name: Build Release APK
+        working-directory: android
+        run: |
+          KEYSTORE_ABS="${{ github.workspace }}/android/app/lann-kyaung.keystore"
+          echo "Using keystore: $KEYSTORE_ABS"
           ./gradlew assembleRelease --no-daemon \
-            -Pandroid.injected.signing.store.file=lann-kyaung.keystore \
-            -Pandroid.injected.signing.store.password=LannKyaungSecurePass123 \
-            -Pandroid.injected.signing.key.alias=lannkyaung \
-            -Pandroid.injected.signing.key.password=LannKyaungSecurePass123
+            -Pandroid.injected.signing.store.file="$KEYSTORE_ABS" \
+            -Pandroid.injected.signing.store.password="LannKyaungSecurePass123" \
+            -Pandroid.injected.signing.key.alias="lannkyaung" \
+            -Pandroid.injected.signing.key.password="LannKyaungSecurePass123"
 
-      # ─────────────────────────────────────────────
-      # 13. Upload Signed Production APK
-      # ─────────────────────────────────────────────
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
