@@ -45,7 +45,7 @@ jobs:
       - name: Init Capacitor
         run: |
           if [ ! -f "capacitor.config.ts" ] && [ ! -f "capacitor.config.json" ]; then
-            npx cap init "Lann Kyaing" "com.lannkyaung.app" --web-dir dist
+            npx cap init "Lann Kyaung" "com.lannkyaung.app" --web-dir dist
           fi
 
       - name: Add Android platform
@@ -57,11 +57,32 @@ jobs:
       - name: Sync Capacitor Android
         run: npx cap sync android
 
+      # ── Copy app icons into Android project ──────────────────
+      - name: Set app icons
+        run: |
+          RES=android/app/src/main/res
+          for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            mkdir -p $RES/mipmap-$density
+            cp android-icons/mipmap-$density/ic_launcher.png       $RES/mipmap-$density/ic_launcher.png
+            cp android-icons/mipmap-$density/ic_launcher_round.png  $RES/mipmap-$density/ic_launcher_round.png
+          done
+          cp android-icons/mipmap-xxxhdpi/ic_launcher_foreground.png $RES/mipmap-xxxhdpi/ic_launcher_foreground.png
+          echo "Icons copied successfully"
+
+      # ── Fix app label to "Lann Kyaung" ───────────────────────
+      - name: Set app name
+        run: |
+          STRINGS=android/app/src/main/res/values/strings.xml
+          # Replace whatever app_name is set to with correct spelling
+          sed -i 's|<string name="app_name">.*</string>|<string name="app_name">Lann Kyaung</string>|g' $STRINGS
+          echo "App name set:"
+          grep app_name $STRINGS
+
       - name: Add Android permissions
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
           grep -q "ACCESS_FINE_LOCATION" $MANIFEST || \
-          sed -i 's|<manifest|<manifest|;/<manifest/a\    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' $MANIFEST
+          sed -i '/<manifest/a\    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" \/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" \/>' $MANIFEST
 
       - name: Grant Gradle permissions
         run: chmod +x android/gradlew
@@ -78,14 +99,11 @@ jobs:
             -storepass "LannKyaungSecurePass123" \
             -keypass "LannKyaungSecurePass123" \
             -dname "CN=LannKyaung, OU=App, O=LannKyaung, L=Yangon, S=Yangon, C=MM"
-          echo "Keystore created at: $PWD/lann-kyaung.keystore"
-          ls -la lann-kyaung.keystore
 
       - name: Build Release APK
         working-directory: android
         run: |
           KEYSTORE_ABS="${{ github.workspace }}/android/app/lann-kyaung.keystore"
-          echo "Using keystore: $KEYSTORE_ABS"
           ./gradlew assembleRelease --no-daemon \
             -Pandroid.injected.signing.store.file="$KEYSTORE_ABS" \
             -Pandroid.injected.signing.store.password="LannKyaungSecurePass123" \
