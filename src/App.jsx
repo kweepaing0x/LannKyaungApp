@@ -28,7 +28,7 @@ export default function App() {
           const [uDoc, cfg, types] = await Promise.all([getUserDoc(u.id), getAdminConfig(), getSituationTypes()]);
           setUserDoc(uDoc);
           setAdminConfig(cfg);
-          if (types?.length) setSituationTypes(types);
+          if(types?.length) setSituationTypes(types);
         } catch(e) { console.warn("load user:", e.message); }
       }
       setReady(true);
