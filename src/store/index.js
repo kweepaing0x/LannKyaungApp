@@ -15,6 +15,9 @@ export const useAppStore = create((set) => ({
   pins: [],           setPins:          (pins) => set({ pins }),
   checkRequests: [],  setCheckRequests: (reqs) => set({ checkRequests: reqs }),
 
+  // Situation types — loaded from DB, used for emoji + color on map
+  situationTypes: [], setSituationTypes: (types) => set({ situationTypes: types }),
+
   // UI tabs & modal
   activeTab: "map",      setActiveTab:     (tab) => set({ activeTab: tab }),
   showPlusModal: false,  setShowPlusModal: (v)   => set({ showPlusModal: v }),
