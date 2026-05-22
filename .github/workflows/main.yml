@@ -56,7 +56,8 @@ jobs:
 
       - name: Sync Capacitor Android
         run: npx cap sync android
-    # ── Copy app icons into Android project ──────────────────
+
+      # ── Copy app icons into Android project ──────────────────
       - name: Set app icons
         run: |
           RES=android/app/src/main/res
@@ -96,31 +97,42 @@ jobs:
           fi
           
           echo "Modern anydpi overrides removed & PNG icons parsed successfully!"
-      # ── Fix app label to "Lann Kyaung" ───────────────────────
-      - name: Set app name
+
+      # ── Fix app label and append AdMob string resource ───────
+      - name: Set app name and string configs
         run: |
           STRINGS=android/app/src/main/res/values/strings.xml
+          
           # Replace whatever app_name is set to with correct spelling
           sed -i 's|<string name="app_name">.*</string>|<string name="app_name">Lann Kyaung</string>|g' $STRINGS
-          echo "App name set:"
-          grep app_name $STRINGS
+          
+          # Clean old injections if running multiple times to avoid duplicates
+          sed -i '/name="admob_app_id"/d' $STRINGS
+          
+          # Safe injection directly right before the closing </resources> tag
+          sed -i 's|</resources>|    <string name="admob_app_id">${{ secrets.ADMOB_APP_ID_ANDROID }}</string>\n</resources>|g' $STRINGS
+          
+          echo "Strings updated check:"
+          cat $STRINGS
 
-      # ─────────────────────────────────────────────
-      # 10. Add Android system permissions and link icons
-      # ─────────────────────────────────────────────
-      - name: Add Android permissions and link icons
+      # ── Configure Manifest: Permissions & Fixed AdMob Metadata ──
+      - name: Add Android permissions and link configurations
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
           
-          # Inject all native system permissions directly inside the <manifest> tag on the fly
+          # Inject native system hardware access vectors directly inside the <manifest> tag on the fly
           grep -q "ACCESS_FINE_LOCATION" $MANIFEST || sed -i '/<manifest/a\    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />\n    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />' $MANIFEST
           
           # Explicitly force the application container to link against your custom android-icons
           sed -i 's|android:icon="[^"]*"|android:icon="@mipmap/ic_launcher"|g' $MANIFEST
           sed -i 's|android:roundIcon="[^"]*"|android:roundIcon="@mipmap/ic_launcher_round"|g' $MANIFEST
           
-          echo "Native Android Manifest verified:"
-          grep -E "uses-permission|icon" $MANIFEST
+          # ADMOB METADATA INJECTION: Clean old entries and append metadata right before closing </application> tag
+          sed -i '/com.google.android.gms.ads.APPLICATION_ID/d' $MANIFEST
+          sed -i 's|</application>|        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="@string/admob_app_id"/>\n    </application>|g' $MANIFEST
+          
+          echo "Native Android Manifest verification output:"
+          cat $MANIFEST
           
       - name: Grant Gradle permissions
         run: chmod +x android/gradlew
