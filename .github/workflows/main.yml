@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build APK
 
 on:
   push:
@@ -67,7 +67,7 @@ jobs:
       - name: Init Capacitor
         run: |
           if [ ! -f "capacitor.config.ts" ] && [ ! -f "capacitor.config.json" ]; then
-            npx cap init "Lann Kyaung" "com.lannkyaung.app" --web-dir dist
+            npx cap init "Lann Kyaing" "com.lannkyaung.app" --web-dir dist
           fi
 
       # ─────────────────────────────────────────────
@@ -91,7 +91,6 @@ jobs:
       - name: Add Android location permissions
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
-
           grep -q "ACCESS_FINE_LOCATION" $MANIFEST || sed -i '/<manifest/a\
           <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\
           <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' $MANIFEST
@@ -103,18 +102,35 @@ jobs:
         run: chmod +x android/gradlew
 
       # ─────────────────────────────────────────────
-      # 12. Build Debug APK
+      # 12. Generate Keystore & Build Release APK
       # ─────────────────────────────────────────────
-      - name: Build Debug APK
-        working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+      - name: Build and Sign Release APK
+        run: |
+          # Create a secure, standalone keystore directly inside the runner workspace
+          keytool -genkey -v \
+            -keystore android/app/lann-kyaung.keystore \
+            -alias lannkyaung \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass "LannKyaungSecurePass123" \
+            -keypass "LannKyaungSecurePass123" \
+            -dname "CN=LannKyaung, OU=App, O=LannKyaung, L=Yangon, S=Yangon, C=MM"
+
+          # Compile the Android production code using the freshly generated key configuration
+          cd android
+          ./gradlew assembleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file=lann-kyaung.keystore \
+            -Pandroid.injected.signing.store.password=LannKyaungSecurePass123 \
+            -Pandroid.injected.signing.key.alias=lannkyaung \
+            -Pandroid.injected.signing.key.password=LannKyaungSecurePass123
 
       # ─────────────────────────────────────────────
-      # 13. Upload APK
+      # 13. Upload Signed Production APK
       # ─────────────────────────────────────────────
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: lann-kyaung-debug-${{ github.run_number }}.apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: lann-kyaung-release-${{ github.run_number }}.apk
+          path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
