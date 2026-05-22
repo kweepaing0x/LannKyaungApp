@@ -45,8 +45,7 @@ export default function PinPopup({ pin, onClose }) {
 
   if (!pin) return null;
 
-  // Fix 1: DB column is commission_rate, not tip_commission_rate
-  // Fix 2: tip_amount reads from adminConfig if pin doesn't override
+  // DB column is commission_rate (not tip_commission_rate)
   const tipAmount      = pin.tip_amount || adminConfig?.tip_amount || 25;
   const commissionRate = adminConfig?.commission_rate ?? 0.20;
   const receiverGets   = Math.round(tipAmount * (1 - commissionRate));
@@ -55,21 +54,12 @@ export default function PinPopup({ pin, onClose }) {
   const isMyPin        = pin.tip_receiver === user?.id;
   const isTippable     = !!pin.tip_enabled && !isMyPin;
 
-  // unlocked = not a tip pin, OR my own pin, OR already paid (checked via DB)
+  // unlocked = either: not a tip pin, OR it's my own pin, OR already paid
   const [unlocked,    setUnlocked]    = useState(!isTippable);
   const [tipLoading,  setTipLoading]  = useState(false);
   const [tipDone,     setTipDone]     = useState(false);
   const [showMedia,   setShowMedia]   = useState(false);
-  const [checkingUnlock, setCheckingUnlock] = useState(isTippable); // true = loading unlock status
 
-  // Fix 4: check if user already tipped this pin (double-tip guard)
-  useEffect(() => {
-    if (!isTippable || !user?.id) { setCheckingUnlock(false); return; }
-    checkAlreadyTipped(user.id, pin.id).then(already => {
-      if (already) setUnlocked(true);
-      setCheckingUnlock(false);
-    });
-  }, [pin.id]);
 
   const maskedUser = maskEmail(pin.posted_by_email);
   const timeStr    = formatMMT(pin.posted_at);
@@ -139,12 +129,11 @@ export default function PinPopup({ pin, onClose }) {
 
           <div style={{padding:"0 20px"}}>
 
-            {/* ── LOCKED STATE — tippable, not yet paid ── */}
+            {/* Loading unlock status */}
             {checkingUnlock && (
-              <div style={{textAlign:"center",padding:"40px 0",color:"#555",fontSize:13}}>
-                Checking...
-              </div>
+              <div style={{textAlign:"center",padding:"40px 0",color:"#555",fontSize:13}}>Checking...</div>
             )}
+            {/* ── LOCKED STATE — tippable, not yet paid ── */}
             {!unlocked && !checkingUnlock && (
               <>
                 {/* Blurred pin preview */}
