@@ -97,15 +97,36 @@ const DEFAULT_ADMIN_CONFIG = {
 export async function getAdminConfig() {
   if (!isConfigured || !supabase) return DEFAULT_ADMIN_CONFIG;
   try {
+    // Force a clean fetch without any RLS issues if possible
     const { data, error } = await supabase
       .from("admin_config")
       .select("*")
+      .order('id', { ascending: true })
+      .limit(1)
       .maybeSingle();
-    if (error) { console.warn("getAdminConfig error:", error.message); return DEFAULT_ADMIN_CONFIG; }
+      
+    if (error) { 
+      console.error("getAdminConfig error:", error.message); 
+      return DEFAULT_ADMIN_CONFIG; 
+    }
+    
+    if (!data) {
+      console.warn("getAdminConfig: No data returned from DB, using defaults");
+      return DEFAULT_ADMIN_CONFIG;
+    }
+
+    // Explicitly check for pin_expiry_hours and log it
+    console.log("getAdminConfig success:", data);
+    
     // Merge with defaults so missing columns don't break anything
-    return { ...DEFAULT_ADMIN_CONFIG, ...(data || {}) };
+    const finalConfig = { ...DEFAULT_ADMIN_CONFIG, ...data };
+    
+    // Safety check: ensure numeric fields are actually numbers
+    if (finalConfig.pin_expiry_hours) finalConfig.pin_expiry_hours = Number(finalConfig.pin_expiry_hours);
+    
+    return finalConfig;
   } catch(e) {
-    console.warn("getAdminConfig failed:", e.message);
+    console.error("getAdminConfig exception:", e.message);
     return DEFAULT_ADMIN_CONFIG;
   }
 }
@@ -312,3 +333,5 @@ export async function postCheckRequest({
     description:`Check request · ${windowMinutes} min`,created_at:now.toISOString(),
   }).then(()=>{}).catch(()=>{});
 }
+
+
