@@ -70,8 +70,8 @@ export default function PlusModal({ onClose }) {
   const canAfford = balance >= finalCredits;
 
   // Derived from adminConfig — falls back to hardcoded defaults if config not loaded
-  const TIP_AMOUNT_LIVE = adminConfig?.tip_amount       ?? TIP_AMOUNT; // 25 pts
-  const EXPIRY_HOURS    = adminConfig?.pin_expiry_hours ?? 24;         // 24 hrs
+  const TIP_AMOUNT_LIVE = Number(adminConfig?.tip_amount || TIP_AMOUNT); 
+  const EXPIRY_HOURS    = Number(adminConfig?.pin_expiry_hours || 24);
 
   // On mount
   useEffect(()=>{
@@ -152,6 +152,13 @@ export default function PlusModal({ onClose }) {
   async function handlePostPin(){
     if(!savedPinLoc) return alert("Please select a location first");
     if(pinMode==="tip" && !mediaFile) return alert("Please attach a photo or video to enable tips");
+    
+    // DEBUG: check expiry hours
+    if (!EXPIRY_HOURS) {
+      console.error("DEBUG: EXPIRY_HOURS is missing!", adminConfig);
+      return alert("System Error: Pin expiry hours not found. Please contact admin.");
+    }
+
     setLoading(true);
     try{
       let mediaUrl=null;
