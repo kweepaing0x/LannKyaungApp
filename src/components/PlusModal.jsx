@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useAppStore } from "../store";
 import {
   postPin, postCheckRequest, getNowMMT,
@@ -6,6 +6,10 @@ import {
   requestGPS, uploadPinMedia,
 } from "../services/supabaseService";
 import { notifyCheckRequest } from "../services/telegramService";
+
+// Capacitor Native Hardware Plugins
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Filesystem } from '@capacitor/filesystem';
 
 const FALLBACK_TYPES = [
   {id:"police",  emoji:"🚔", label_my:"ရဲ ရှိသည်",    label_en:"Police",       color:"#E24B4A"},
@@ -25,7 +29,7 @@ const TIME_WINDOWS = [
 ];
 const CUSTOM_HOURS     = [1,2,3,4,5,6,7,8];
 const CREDITS_PER_HOUR = 180;
-const TIP_AMOUNT       = 25; // fallback only
+const TIP_AMOUNT        = 25; 
 
 export default function PlusModal({ onClose }) {
   const {
@@ -48,13 +52,11 @@ export default function PlusModal({ onClose }) {
   const [types,       setTypes]       = useState(FALLBACK_TYPES);
   const [mmtTime,     setMmtTime]     = useState(getNowMMT());
 
-  // Media
+  // Media Native Storage States
   const [mediaFile,    setMediaFile]    = useState(null);
   const [mediaPreview, setMediaPreview] = useState(null);
-  const fileInputRef = useRef(null);
-
-  // Tip options — only shown when media is attached
-  const [pinMode, setPinMode] = useState("free"); // "free" | "tip"
+  const [isVideo,      setIsVideo]      = useState(false);
+  const [pinMode,      setPinMode]      = useState("free"); 
 
   // Time window (check request)
   const [selWindow,   setSelWindow]   = useState("30min");
@@ -63,22 +65,17 @@ export default function PlusModal({ onClose }) {
   const activeWindow = TIME_WINDOWS.find(w => w.id === selWindow);
   const finalMinutes = selWindow === "custom" ? customHours*60 : activeWindow.minutes;
   const finalCredits = selWindow === "custom" ? customHours*CREDITS_PER_HOUR : activeWindow.credits;
-  const windowLabel  = selWindow === "custom"
-    ? `Custom · ${customHours} hr${customHours>1?"s":""}` : activeWindow.label;
+  const windowLabel  = selWindow === "custom" ? `Custom · ${customHours} hr${customHours>1?"s":""}` : activeWindow.label;
 
   const balance   = userDoc?.balance_credits ?? 0;
   const canAfford = balance >= finalCredits;
 
-  // Derived variables from adminConfig with safe fallbacks
   const TIP_AMOUNT_LIVE = Number(adminConfig?.tip_amount || TIP_AMOUNT); 
   const EXPIRY_HOURS    = Number(adminConfig?.pin_expiry_hours || 24);
-
-  // Safe evaluations to prevent the crashes
   const COMMISSION_RATE = Number(adminConfig?.commission_pct || adminConfig?.tip_commission_rate || 0.20);
   const COMMISSION_PCT  = Math.round(COMMISSION_RATE * 100);
   const RECEIVER_GETS   = Math.round(TIP_AMOUNT_LIVE - (TIP_AMOUNT_LIVE * COMMISSION_RATE));
 
-  // On mount
   useEffect(()=>{
     if(userLocation && !savedPinLoc){ setSavedPinLoc(userLocation); setPinSource("gps"); }
     if(userLocation && !savedReqLoc){ setSavedReqLoc(userLocation); setReqSource("gps"); }
@@ -113,7 +110,7 @@ export default function PlusModal({ onClose }) {
       if(target==="req"){ setSavedReqLoc(loc); setReqSource("gps"); }
     }catch(err){
       if(err.code===1){
-        alert("GPS is blocked.\n\nTo enable in Chrome:\n1. Tap 🔒 in the address bar\n2. Site settings → Location → Allow\n3. Refresh the page\n4. Tap 'Use GPS' again");
+        alert("GPS is blocked.\n\nTo enable in Chrome/Android App Settings:\n1. Open Settings -> Apps\n2. Grant Location Permissions\n3. Restart app");
       } else {
         alert("GPS not available. Please try 'Pick on map' instead.");
       }
@@ -126,18 +123,43 @@ export default function PlusModal({ onClose }) {
     setShowPlusModal(false);
   }
 
-  function handleFileChange(e){
-    const file=e.target.files?.[0];
-    if(!file) return;
-    if(file.size>50*1024*1024){ alert("File too large. Max 50MB."); return; }
-    setMediaFile(file);
-    setMediaPreview(URL.createObjectURL(file));
+  async function handleSelectMedia() {
+    try {
+      const media = await Camera.getPhoto({
+        quality: 60, 
+        allowEditing: false,
+        resultType: CameraResultType.Uri,
+        source: CameraSource.Photos
+      });
+
+      if (!media.webPath || !media.path) {
+        throw new Error("Invalid media payload returned from native hardware device.");
+      }
+
+      setIsVideo(media.format === 'mp4' || media.format === 'webm');
+      setMediaPreview(media.webPath);
+
+      const nativeFileBuffer = await Filesystem.readFile({
+        path: media.path
+      });
+
+      const rawResponse = await fetch(`data:image/${media.format};base64,${nativeFileBuffer.data}`);
+      const fallbackBlob = await rawResponse.blob();
+      
+      const parsedWebFilePayload = new File([fallbackBlob], `pin_${Date.now()}.${media.format}`, {
+        type: `image/${media.format}`
+      });
+
+      setMediaFile(parsedWebFilePayload);
+    } catch (err) {
+      console.warn("Native hardware media capture cancelled or failed:", err.message);
+    }
   }
+
   function removeMedia(){
     setMediaFile(null);
-    if(mediaPreview) URL.revokeObjectURL(mediaPreview);
     setMediaPreview(null);
-    if(fileInputRef.current) fileInputRef.current.value="";
+    setIsVideo(false);
     setPinMode("free");
   }
 
@@ -157,29 +179,32 @@ export default function PlusModal({ onClose }) {
   async function handlePostPin(){
     if(!savedPinLoc) return alert("Please select a location first");
     if(pinMode==="tip" && !mediaFile) return alert("Please attach a photo or video to enable tips");
-    
-    if (!EXPIRY_HOURS) {
-      console.error("DEBUG: EXPIRY_HOURS is missing!", adminConfig);
-      return alert("System Error: Pin expiry hours not found. Please contact admin.");
-    }
+    if(!EXPIRY_HOURS) return alert("System Error: Pin expiry hours not found. Please contact admin.");
 
     setLoading(true);
     try{
       let mediaUrl=null;
       if(mediaFile){
-        try{ mediaUrl=await uploadPinMedia(mediaFile,`${user?.id}_${Date.now()}`); }
-        catch(e){ console.warn("Media upload failed:",e.message); }
+        try{ 
+          const baseUploadRequest = uploadPinMedia(mediaFile, `${user?.id}_${Date.now()}`);
+          const emergencyTimeDropTrigger = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Supabase write interface dropped due to connection timeout.")), 30000)
+          );
+          mediaUrl = await Promise.race([baseUploadRequest, emergencyTimeDropTrigger]);
+        } catch(e) { 
+          throw new Error("File submission timed out or interface connection closed. Reduce video length.");
+        }
       }
       const tipEnabled = pinMode==="tip" && !!mediaUrl;
       await postPin({
-        type:     currentType.id,
-        emoji:    currentType.emoji,
-        lat:      savedPinLoc.lat,
-        lng:      savedPinLoc.lng,
-        postedBy: user?.id,
+        type:      currentType.id,
+        emoji:     currentType.emoji,
+        lat:       savedPinLoc.lat,
+        lng:       savedPinLoc.lng,
+        postedBy:  user?.id,
         postedByEmail: user?.email,
-        labelMy:  currentType.label_my,
-        labelEn:  currentType.label_en,
+        labelMy:   currentType.label_my,
+        labelEn:   currentType.label_en,
         mediaUrl,
         isPaidPin: tipEnabled,
         tipEnabled,
@@ -187,6 +212,7 @@ export default function PlusModal({ onClose }) {
         expiryHours: EXPIRY_HOURS,
       });
       setSavedPinLoc(null); setPinSource(null);
+      removeMedia();
       setShowPlusModal(false);
     }catch(e){ alert("Error: "+e.message); }
     finally{ setLoading(false); }
@@ -224,8 +250,6 @@ export default function PlusModal({ onClose }) {
     }catch(e){ alert("Error: "+e.message); }
     finally{ setLoading(false); }
   }
-
-  const isVideo=mediaFile?.type?.startsWith("video");
 
   return(
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.78)",zIndex:999,display:"flex",alignItems:"flex-end"}}>
@@ -284,18 +308,17 @@ export default function PlusModal({ onClose }) {
             <SLabel>POSTED TIME (MMT)</SLabel>
             <LocBox icon="🕐" title={mmtTime} sub="Myanmar Standard Time · UTC+6:30"/>
 
-            {/* Photo / video */}
             <SLabel>PHOTO / VIDEO <span style={{color:"#444",fontWeight:400,fontSize:9}}>(Optional)</span></SLabel>
             {!mediaPreview?(
-              <button onClick={()=>fileInputRef.current?.click()} style={{
+              <button onClick={handleSelectMedia} style={{
                 width:"100%",padding:"12px",borderRadius:12,
                 border:"1.5px dashed rgba(255,255,255,0.12)",
-                background:"#0d0d0d",color:"#666",fontSize:12,fontWeight:600,
+                background:"#0d0d0d",color:"#888",fontSize:12,fontWeight:600,
                 cursor:"pointer",fontFamily:"inherit",marginBottom:14,
                 display:"flex",alignItems:"center",justifyContent:"center",gap:8,
               }}>
-                <i className="ti ti-camera" style={{fontSize:18}} aria-hidden="true"/>
-                Add photo or video to verify
+                <span style={{fontSize:16}}>📷</span>
+                Select Image (Capacitor Native Gallery)
               </button>
             ):(
               <>
@@ -311,7 +334,6 @@ export default function PlusModal({ onClose }) {
                   }}>✕</button>
                 </div>
 
-                {/* Tip option — only when media attached */}
                 <SLabel>PIN TYPE</SLabel>
                 <div style={{display:"flex",gap:8,marginBottom:14}}>
                   {[
@@ -336,9 +358,7 @@ export default function PlusModal({ onClose }) {
                 {pinMode==="tip"&&(
                   <div style={{background:"rgba(239,159,39,0.08)",borderRadius:10,padding:"10px 12px",
                     border:"0.5px solid rgba(239,159,39,0.3)",marginBottom:14}}>
-                    <div style={{color:"#EF9F27",fontSize:12,fontWeight:700,marginBottom:3}}>
-                      ☕ Tip enabled
-                    </div>
+                    <div style={{color:"#EF9F27",fontSize:12,fontWeight:700,marginBottom:3}}>☕ Tip enabled</div>
                     <div style={{color:"#888",fontSize:11,lineHeight:1.6}}>
                       Viewers can send you a ☕ tea tip of <strong style={{color:"#EF9F27"}}>{TIP_AMOUNT_LIVE} pts</strong>.<br/>
                       After {COMMISSION_PCT}% commission you receive <strong style={{color:"#EF9F27"}}>{RECEIVER_GETS} pts</strong> per tip.
@@ -347,7 +367,6 @@ export default function PlusModal({ onClose }) {
                 )}
               </>
             )}
-            <input ref={fileInputRef} type="file" accept="image/*,video/*" style={{display:"none"}} onChange={handleFileChange}/>
 
             <button onClick={handlePostPin} disabled={loading||!savedPinLoc} style={{
               width:"100%",marginTop:4,border:"none",borderRadius:12,padding:14,
