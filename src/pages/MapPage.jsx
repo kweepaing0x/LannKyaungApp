@@ -3,7 +3,23 @@ import { useAppStore } from "../store";
 import { subscribePins, subscribeCheckRequests, subscribeHistoryPins } from "../services/supabaseService";
 import PinPopup from "../components/PinPopup";
 
-// PIN_COLORS removed — colors and emojis now come from situation_types DB table
+// 1. Hardcode your CURRENT app build version here
+const CURRENT_VERSION = "1.1.0"; 
+
+// 2. Semantic version comparison helper
+function isOutdated(current, minimum) {
+  if (!minimum) return false;
+  const currParts = current.split('.').map(Number);
+  const minParts = minimum.split('.').map(Number);
+  
+  for (let i = 0; i < Math.max(currParts.length, minParts.length); i++) {
+    const curr = currParts[i] || 0;
+    const min = minParts[i] || 0;
+    if (curr < min) return true;
+    if (curr > min) return false;
+  }
+  return false;
+}
 
 function PickCrosshair(){
   return(
@@ -34,22 +50,27 @@ export default function MapPage(){
     showPlusModal,setShowPlusModal,
     pickingLocation,setPickingLocation,
     setPickedLocation,
-    pendingPickTarget,
-    userDoc,adminConfig,
+    adminConfig,
     situationTypes,
+    userDoc,
   } = useAppStore();
 
   const [mapReady,setMapReady]       = useState(false);
   const [historyPins,setHistoryPins] = useState([]);
   const [selectedPin,setSelectedPin] = useState(null);
-  const [gpsStatus,setGpsStatus]     = useState("pending"); // "pending"|"granted"|"denied"|"unavailable"
+  const [gpsStatus,setGpsStatus]     = useState("pending"); 
   const [showGpsPopup,setShowGpsPopup] = useState(false);
 
   const accountType = userDoc?.account_type || "normal";
 
-  // Init map
+  // 3. Evaluate version validity against Supabase config data
+  const isRequiredToUpdate = isOutdated(CURRENT_VERSION, adminConfig?.min_required_version);
+  const downloadUrl = adminConfig?.update_url || "https://drive.google.com/file/d/16nNlo39y_d-MCAbAN1qe_znwlHC6VCOA/view?usp=drive_link";
+
+  // Init map (Only proceeds if application version matches requirements)
   useEffect(()=>{
-    if(mapInstance.current||!mapRef.current) return;
+    if(mapInstance.current || !mapRef.current || isRequiredToUpdate) return;
+    
     const init=()=>{
       const L=window.L;
       const map=L.map(mapRef.current,{
@@ -62,7 +83,7 @@ export default function MapPage(){
       }).addTo(map);
       mapInstance.current=map;
       setMapReady(true);
-      // Browser geolocation (works on web + Android WebView)
+
       if(!navigator.geolocation){
         setGpsStatus("unavailable");
         setShowGpsPopup(true);
@@ -98,7 +119,7 @@ export default function MapPage(){
     };
     if(window.L) init();
     else{const id=setInterval(()=>{if(window.L){clearInterval(id);init();}},100);return()=>clearInterval(id);}
-  },[]);
+  },[isRequiredToUpdate]);
 
   // Confirm map pick
   function confirmPickLocation(){
@@ -122,32 +143,41 @@ export default function MapPage(){
     setPickingLocation(false);
     setTimeout(()=>setShowPlusModal(true),100);
   }
+
   function cancelPick(){
     setPickingLocation(false);
     if(dropMarkerRef.current){dropMarkerRef.current.remove();dropMarkerRef.current=null;}
     setTimeout(()=>setShowPlusModal(true),100);
   }
+
   useEffect(()=>{
     if(!showPlusModal&&!pickingLocation&&dropMarkerRef.current){
       dropMarkerRef.current.remove();dropMarkerRef.current=null;
     }
   },[showPlusModal,pickingLocation]);
 
-  // Subscribe pins — live for all users, no gate needed
+  // Subscriptions
   useEffect(()=>{
+    if(isRequiredToUpdate) return;
     const u=subscribePins(setPins);
     return u;
-  },[]);
+  },[isRequiredToUpdate]);
 
-  useEffect(()=>{const u=subscribeCheckRequests(setCheckRequests);return u;},[]);
   useEffect(()=>{
+    if(isRequiredToUpdate) return;
+    const u=subscribeCheckRequests(setCheckRequests);
+    return u;
+  },[isRequiredToUpdate]);
+
+  useEffect(()=>{
+    if(isRequiredToUpdate) return;
     if(showHistory){const u=subscribeHistoryPins(setHistoryPins, adminConfig?.pin_history_days??7);return u;}
     else setHistoryPins([]);
-  },[showHistory]);
+  },[showHistory, isRequiredToUpdate]);
 
   // Draw pins
   useEffect(()=>{
-    if(!mapReady||!mapInstance.current||!window.L) return;
+    if(!mapReady||!mapInstance.current||!window.L||isRequiredToUpdate) return;
     const L=window.L;
     markersRef.current.forEach(m=>m.remove());
     markersRef.current=[];
@@ -156,7 +186,6 @@ export default function MapPage(){
       const hist = !!pin.is_history;
       const hasTip = !!pin.tip_enabled && !hist;
 
-      // Look up type from DB situation_types, fallback to pin fields
       const typeInfo = situationTypes?.find(t => t.id === pin.type);
       const emoji    = pin.emoji || typeInfo?.emoji || "📍";
       const color    = typeInfo?.color || "#888780";
@@ -204,7 +233,7 @@ export default function MapPage(){
         .on("click",()=>setSelectedPin(pin));
       markersRef.current.push(m);
     });
-  },[pins,historyPins,mapReady,showHistory]);
+  },[pins,historyPins,mapReady,showHistory,isRequiredToUpdate]);
 
   function centerOnUser(){
     if(userLocation&&mapInstance.current){
@@ -250,15 +279,14 @@ export default function MapPage(){
     <div style={{position:"relative",width:"100%",height:"100%",background:"#0d0d0d"}}>
       <style>{`@keyframes lkPulse{0%{transform:scale(1);opacity:.6}100%{transform:scale(2.2);opacity:0}}`}</style>
       <div ref={mapRef} style={{width:"100%",height:"100%"}}/>
-      {!mapReady&&(
+      {!mapReady&&!isRequiredToUpdate&&(
         <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",
           justifyContent:"center",background:"#0d0d0d",color:"#fff",fontSize:14,zIndex:5}}>
           မြေပုံ တင်နေသည်...
         </div>
       )}
 
-      {/* Normal user banner — display only, no delay applied */}
-      {accountType==="normal"&&!pickingLocation&&(
+      {accountType==="normal"&&!pickingLocation&&!isRequiredToUpdate&&(
         <div style={{position:"absolute",top:0,left:0,right:0,zIndex:600,
           background:"rgba(20,20,20,0.92)",padding:"7px 14px",
           borderBottom:"0.5px solid rgba(255,255,255,0.07)",
@@ -267,13 +295,12 @@ export default function MapPage(){
             ⚡ Live pins · <span style={{color:"#EF9F27"}}>Normal account</span>
           </span>
           <span style={{color:"#534AB7",fontSize:10,fontWeight:700,cursor:"pointer"}}
-            onClick={()=>alert("Upgrade to Business to see real-time pins.\nContact @dx0dev  on Telegram.")}>
+            onClick={()=>alert("Upgrade to Business to see real-time pins.\nContact @dx0dev on Telegram.")}>
             Upgrade →
           </span>
         </div>
       )}
 
-      {/* Pick mode */}
       {pickingLocation&&(<>
         <div style={{position:"absolute",top:0,left:0,right:0,zIndex:900,
           background:"rgba(83,74,183,0.97)",padding:"12px 16px 10px",
@@ -300,8 +327,7 @@ export default function MapPage(){
         </div>
       </>)}
 
-      {/* Normal mode controls */}
-      {!pickingLocation&&(<>
+      {!pickingLocation&&!isRequiredToUpdate&&(<>
         <div onClick={()=>setShowHistory(!showHistory)} style={{
           position:"absolute",top:accountType==="normal"?42:14,
           left:"50%",transform:"translateX(-50%)",
@@ -356,7 +382,6 @@ export default function MapPage(){
         )}
       </>)}
 
-      {/* GPS status popup */}
       {showGpsPopup&&!pickingLocation&&(
         <div onClick={()=>setShowGpsPopup(false)} style={{
           position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",
@@ -368,10 +393,7 @@ export default function MapPage(){
             border:"0.5px solid rgba(255,255,255,0.09)",
             padding:"20px 20px calc(24px + env(safe-area-inset-bottom,0px))",
           }}>
-            {/* Handle */}
             <div style={{width:36,height:4,background:"#2e2e2e",borderRadius:2,margin:"0 auto 20px"}}/>
-
-            {/* Icon */}
             <div style={{textAlign:"center",marginBottom:16}}>
               <div style={{
                 width:64,height:64,borderRadius:"50%",
@@ -394,7 +416,6 @@ export default function MapPage(){
               </div>
             </div>
 
-            {/* Actions */}
             {gpsStatus==="denied"?(
               <>
                 <div style={{
@@ -439,6 +460,50 @@ export default function MapPage(){
       )}
 
       {selectedPin&&<PinPopup pin={selectedPin} onClose={()=>setSelectedPin(null)}/>}
+
+      {/* Force Update Modal Blockade */}
+      {isRequiredToUpdate && (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(13,13,13,0.98)",
+          zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "24px"
+        }}>
+          <div style={{
+            width: "100%", maxWidth: "340px", background: "#1a1a1a",
+            borderRadius: "20px", border: "0.5px solid rgba(255,255,255,0.09)",
+            padding: "28px 24px", textAlign: "center",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.7)"
+          }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: "50%",
+              background: "rgba(83,74,183,0.15)", border: "1.5px solid rgba(83,74,183,0.4)",
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              fontSize: 28, marginBottom: 16
+            }}>
+              🚀
+            </div>
+            <div style={{ color: "#fff", fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
+              Update Required
+            </div>
+            <div style={{ color: "#aaa", fontSize: 13, lineHeight: 1.6, marginBottom: 24 }}>
+              A new version of the app is available. Please update to continue using the map and receiving live pins.
+            </div>
+            <button 
+              onClick={() => {
+                window.location.href = downloadUrl;
+              }} 
+              style={{
+                width: "100%", padding: "14px", borderRadius: 12, border: "none",
+                background: "#534AB7", color: "#fff", fontSize: 14, fontWeight: 700,
+                cursor: "pointer", fontFamily: "inherit", 
+                boxShadow: "0 4px 14px rgba(83,74,183,0.4)"
+              }}
+            >
+              Update Now
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
