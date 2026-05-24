@@ -1,23 +1,17 @@
-<!--
-  ADD THESE inside the <manifest> tag in:
-  android/app/src/main/AndroidManifest.xml
-
-  Open that file and paste all lines below just before <application ...>
--->
-
-    <!-- Internet (required for Supabase) -->
+<!-- Internet & Connection Quality (Required for Supabase Auth/Database syncing) -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- GPS — precise location -->
+    <!-- High-Accuracy GPS (Required for Live Pin Dropping and Location Checks) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <!-- Camera + media for pin uploads -->
+    <!-- Hardware Camera Capture & Native Image/Video Selection -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-    <!-- Android 12 and below -->
+    
+    <!-- Legacy Fallback Storage Permissions (For backward compatibility on Android 12 and older) -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
