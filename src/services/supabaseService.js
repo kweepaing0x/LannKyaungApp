@@ -79,8 +79,7 @@ export async function updateUserDoc(uid,updates) {
 }
 
 // ── ADMIN CONFIG ──────────────────────────────────────────────
-// Always returns a usable config — never null — so the app works
-// even if the admin_config table is empty or RLS blocks the read
+// Integrated default values for semantic forced upgrades
 const DEFAULT_ADMIN_CONFIG = {
   commission_rate:       0.10,
   tip_commission_rate:   0.20,
@@ -92,6 +91,8 @@ const DEFAULT_ADMIN_CONFIG = {
   maintenance_mode:      false,
   contact_telegram:      "@dx0dev",
   default_language:      "my",
+  min_required_version:  "1.0.0", // Fallback baseline version
+  update_url:            "https://drive.google.com/file/d/16nNlo39y_d-MCAbAN1qe_znwlHC6VCOA/view?usp=drive_link", // Your explicit build URL
 };
 
 export async function getAdminConfig() {
@@ -273,7 +274,7 @@ export async function sendTip({ fromUid, toUid, pinId, tipAmount, commissionRate
 
   // 5. Log transactions
   const txRows = [
-    { uid:fromUid, type:"tip_sent",       amount:-tipAmount,   description:"☕ Tea tip sent",     ref_id:pinId, created_at:now.toISOString() },
+    { uid:fromUid, type:"tip_sent",       amount:-tipAmount,   description:"☕ Tea tip sent",      ref_id:pinId, created_at:now.toISOString() },
     { uid:toUid,   type:"tip_received",   amount:receiverGets, description:"☕ Tea tip received",  ref_id:pinId, created_at:now.toISOString() },
     { uid:"admin", type:"tip_commission", amount:commission,   description:"☕ Tip commission",    ref_id:pinId, created_at:now.toISOString() },
   ];
@@ -317,7 +318,7 @@ export async function postCheckRequest({
   if (bal<creditsCost) throw new Error(`Not enough credits. Have ${bal}, need ${creditsCost}`);
   const {error:re} = await supabase.from("check_requests").insert({
     requester_uid:  requesterUid,
-    target_lat:     Number(targetLat), target_lng: Number(targetLng),
+    target_lat:      Number(targetLat), target_lng: Number(targetLng),
     target_label:   targetLabel||"Custom location",
     window_minutes: windowMinutes, credits_cost: creditsCost,
     status:"pending", created_at:now.toISOString(),
@@ -333,5 +334,3 @@ export async function postCheckRequest({
     description:`Check request · ${windowMinutes} min`,created_at:now.toISOString(),
   }).then(()=>{}).catch(()=>{});
 }
-
-
