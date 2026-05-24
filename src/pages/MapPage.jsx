@@ -489,18 +489,19 @@ export default function MapPage(){
               A new version of the app is available. Please update to continue using the map and receiving live pins.
             </div>
             <button 
-              onClick={() => {
-                window.location.href = downloadUrl;
-              }} 
-              style={{
-                width: "100%", padding: "14px", borderRadius: 12, border: "none",
-                background: "#534AB7", color: "#fff", fontSize: 14, fontWeight: 700,
-                cursor: "pointer", fontFamily: "inherit", 
-                boxShadow: "0 4px 14px rgba(83,74,183,0.4)"
-              }}
-            >
-              Update Now
-            </button>
+  onClick={() => {
+    // Opens directly in Chrome/Safari, breaking out of standard WebViews
+    window.open(downloadUrl, "_blank", "noopener,noreferrer");
+  }} 
+  style={{
+    width: "100%", padding: "14px", borderRadius: 12, border: "none",
+    background: "#534AB7", color: "#fff", fontSize: 14, fontWeight: 700,
+    cursor: "pointer", fontFamily: "inherit", 
+    boxShadow: "0 4px 14px rgba(83,74,183,0.4)"
+  }}
+>
+  Update Now
+</button>
           </div>
         </div>
       )}
