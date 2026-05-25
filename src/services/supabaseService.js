@@ -335,12 +335,13 @@ export async function postCheckRequest({
   }).then(()=>{}).catch(()=>{});
 }
 // ── google sign ────────────────────────────────────────────
-export async function signInWithGoogle() {
-  guard();
+export async function signInWithGoogleMobile() {
   const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
+    provider: 'google',
     options: {
-      redirectTo: window.location.origin,
+      // CRITICAL: This MUST match your Redirect URL setting in Supabase exactly
+      redirectTo: 'lannkyaung://login-callback', 
+      skipBrowserRedirect: false
     },
   });
   if (error) throw error;
