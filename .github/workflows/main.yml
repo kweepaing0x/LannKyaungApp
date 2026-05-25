@@ -123,28 +123,40 @@ jobs:
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
           
-          # 1. Standard Permissions Injection
-          grep -q "ACCESS_FINE_LOCATION" $MANIFEST || sed -i '/<manifest/a\    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />\n    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />' $MANIFEST
+          # 1. CLEAN UP DUPLICATE PERMISSIONS: Avoid double injection conflicts
+          # Only add permissions if they don't already exist in the file
+          for perm in "CAMERA" "READ_MEDIA_IMAGES" "READ_MEDIA_VIDEO" "ACCESS_FINE_LOCATION" "ACCESS_COARSE_LOCATION" "READ_EXTERNAL_STORAGE" "WRITE_EXTERNAL_STORAGE"; do
+            if ! grep -q "android.permission.$perm" $MANIFEST; then
+              if [ "$perm" = "READ_EXTERNAL_STORAGE" ]; then
+                sed -i '/<manifest/a\    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />' $MANIFEST
+              elif [ "$perm" = "WRITE_EXTERNAL_STORAGE" ]; then
+                sed -i '/<manifest/a\    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />' $MANIFEST
+              else
+                sed -i '/<manifest/a\    <uses-permission android:name="android.permission.'$perm'" />' $MANIFEST
+              fi
+            fi
+          done
           
-          # Explicitly force the application container to link against your custom android-icons
+          # Force custom launcher icons
           sed -i 's|android:icon="[^"]*"|android:icon="@mipmap/ic_launcher"|g' $MANIFEST
           sed -i 's|android:roundIcon="[^"]*"|android:roundIcon="@mipmap/ic_launcher_round"|g' $MANIFEST
           
-          # 2. INTENT FILTER SCHEME INJECTION (Fixes the localhost loop)
-          # Clean old injection flags to avoid duplicates
+          # 2. ADD EXPORTED=TRUE & INTENT FILTER TO MAINACTIVITY
+          # Scrub out old custom scheme filters to start clean
           sed -i '/lannkyaung/d' $MANIFEST
           
-          # Format the complete deep link node string safely
+          # Force android:exported="true" directly onto the MainActivity declaration
+          sed -i 's|android:name=".MainActivity"|android:name=".MainActivity" android:exported="true"|g' $MANIFEST
+          
+          # Construct and inject the custom protocol listener right behind the tag opening line
           INTENT_BLOCK='<intent-filter><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="lannkyaung" /></intent-filter>'
+          sed -i "s|android:exported=\"true\"|android:exported=\"true\">\n            $INTENT_BLOCK|g" $MANIFEST
           
-          # Locate the main activity closing vector and append the custom schema listener directly inside it
-          sed -i "s|android:name=\".MainActivity\"|android:name=\".MainActivity\">\n            $INTENT_BLOCK|g" $MANIFEST
-          
-          # 3. ADMOB METADATA INJECTION: Clean old entries and append metadata right before closing </application> tag
+          # 3. ADMOB METADATA INJECTION
           sed -i '/com.google.android.gms.ads.APPLICATION_ID/d' $MANIFEST
           sed -i 's|</application>|        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="@string/admob_app_id"/>\n    </application>|g' $MANIFEST
           
-          echo "=== VERIFYING FINAL MANIFEST CONFIGURATION ==="
+          echo "=== VERIFYING NATIVE MANIFEST ==="
           cat $MANIFEST
           
       - name: Grant Gradle permissions
