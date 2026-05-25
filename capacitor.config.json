@@ -3,7 +3,8 @@
   "appName": "Lann Kyaung",
   "webDir": "dist",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "iosScheme": "lannkyaung"
   },
   "android": {
     "allowMixedContent": true,
