@@ -334,3 +334,15 @@ export async function postCheckRequest({
     description:`Check request · ${windowMinutes} min`,created_at:now.toISOString(),
   }).then(()=>{}).catch(()=>{});
 }
+// ── google sign ────────────────────────────────────────────
+export async function signInWithGoogle() {
+  guard();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: window.location.origin,
+    },
+  });
+  if (error) throw error;
+  return data;
+}
