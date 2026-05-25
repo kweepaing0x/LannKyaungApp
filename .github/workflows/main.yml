@@ -118,23 +118,33 @@ jobs:
           echo "Strings updated verification check:"
           cat $STRINGS
           
-      # ── Configure Manifest: Permissions & Fixed AdMob Metadata ──
+     # ── Configure Manifest: Permissions, Deep-Links & Fixed AdMob Metadata ──
       - name: Add Android permissions and link configurations
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
           
-          # Inject native system hardware access vectors directly inside the <manifest> tag on the fly
+          # 1. Standard Permissions Injection
           grep -q "ACCESS_FINE_LOCATION" $MANIFEST || sed -i '/<manifest/a\    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />\n    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />' $MANIFEST
           
           # Explicitly force the application container to link against your custom android-icons
           sed -i 's|android:icon="[^"]*"|android:icon="@mipmap/ic_launcher"|g' $MANIFEST
           sed -i 's|android:roundIcon="[^"]*"|android:roundIcon="@mipmap/ic_launcher_round"|g' $MANIFEST
           
-          # ADMOB METADATA INJECTION: Clean old entries and append metadata right before closing </application> tag
+          # 2. INTENT FILTER SCHEME INJECTION (Fixes the localhost loop)
+          # Clean old injection flags to avoid duplicates
+          sed -i '/lannkyaung/d' $MANIFEST
+          
+          # Format the complete deep link node string safely
+          INTENT_BLOCK='<intent-filter><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="lannkyaung" /></intent-filter>'
+          
+          # Locate the main activity closing vector and append the custom schema listener directly inside it
+          sed -i "s|android:name=\".MainActivity\"|android:name=\".MainActivity\">\n            $INTENT_BLOCK|g" $MANIFEST
+          
+          # 3. ADMOB METADATA INJECTION: Clean old entries and append metadata right before closing </application> tag
           sed -i '/com.google.android.gms.ads.APPLICATION_ID/d' $MANIFEST
           sed -i 's|</application>|        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="@string/admob_app_id"/>\n    </application>|g' $MANIFEST
           
-          echo "Native Android Manifest verification output:"
+          echo "=== VERIFYING FINAL MANIFEST CONFIGURATION ==="
           cat $MANIFEST
           
       - name: Grant Gradle permissions
