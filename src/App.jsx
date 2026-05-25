@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import { useAppStore } from "./store";
 import { onAuthChange, getUserDoc, getAdminConfig, getSituationTypes } from "./services/supabaseService";
-import { isConfigured } from "./supabase";
+import { isConfigured, supabase } from "./supabase"; // ── IMPORT supabase CLIENT HERE ──
 import { useTranslation } from "react-i18next";
 import LoginPage   from "./pages/LoginPage";
 import MapPage     from "./pages/MapPage";
 import ProfilePage from "./pages/ProfilePage";
 import PlusModal   from "./components/PlusModal";
 
-// ── IMPORT ADMOB EXTENSIONS ─────────────────────────────────
+// ── IMPORT NATIVE APP CORE PLUGIN ───────────────────────────
+import { App as CapacitorApp } from "@capacitor/app";
 import { AdMob, InterstitialAdPluginEvents } from "@capacitor-community/admob";
 
 export default function App() {
@@ -17,12 +18,57 @@ export default function App() {
     activeTab, setActiveTab, showPlusModal, setShowPlusModal } = useAppStore();
   const [ready, setReady] = useState(false);
 
+  // ── DEEP LINK INTERCEPTION LISTENER ─────────────────────────
+  useEffect(() => {
+    if (!isConfigured) return;
+
+    const setupDeepLinks = async () => {
+      CapacitorApp.addListener("appUrlOpen", async (event) => {
+        try {
+          // Parse the incoming URL scheme structure safely
+          const url = new URL(event.url);
+          const hash = url.hash; // Extracts #access_token=...&refresh_token=...
+
+          if (hash) {
+            // Transform url fragments into standard URLSearchParams properties
+            const params = new URLSearchParams(hash.replace("#", "?"));
+            const accessToken = params.get("access_token");
+            const refreshToken = params.get("refresh_token");
+
+            if (accessToken && refreshToken) {
+              setReady(false); // Temporarily spin while session injects
+              
+              const { error } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              });
+
+              if (error) {
+                console.error("Deep link token assignment failure:", error.message);
+                setReady(true);
+              }
+              // Note: if successful, onAuthChange triggers automatically below!
+            }
+          }
+        } catch (err) {
+          console.error("Failed to process native incoming deep-link context:", err);
+          setReady(true);
+        }
+      });
+    };
+
+    setupDeepLinks();
+
+    return () => {
+      CapacitorApp.removeAllListeners();
+    };
+  }, []);
+  // ────────────────────────────────────────────────────────────
+
   // ── ADMOB INITIALIZATION & PRELOAD SYSTEM ───────────────────
   useEffect(() => {
-    // 1. Initialize core engine context
     AdMob.initialize().catch((err) => console.error("AdMob Init Failed:", err));
 
-    // 2. Loop preloader: Cache a new asset vector instantly when the current one closes
     const dismissListener = AdMob.addListener(
       InterstitialAdPluginEvents.Closed,
       () => {
@@ -31,8 +77,7 @@ export default function App() {
       }
     );
 
-    // Warm up the initial ad instance container
-    preloadInterstitial();
+    warmupInterstitial();
 
     return () => {
       dismissListener.remove();
@@ -42,8 +87,8 @@ export default function App() {
   const preloadInterstitial = async () => {
     try {
       await AdMob.prepareInterstitial({
-        adId: "ca-app-pub-4379269817546913/1770419841", // Production ID
-        isTesting: true, // ⚠️ Keep TRUE while installing directly via your phone
+        adId: "ca-app-pub-4379269817546913/1770419841", 
+        isTesting: true, 
       });
       console.log("✅ Interstitial preloaded successfully.");
     } catch (error) {
@@ -51,12 +96,14 @@ export default function App() {
     }
   };
 
+  const warmupInterstitial = async () => {
+    await preloadInterstitial();
+  };
+
   const handlePlusButtonClick = async () => {
-    // Route navigation view container state
     setActiveTab("map");
     setShowPlusModal(true);
 
-    // Trigger full-screen ad break over the top layer seamlessly
     try {
       await AdMob.showInterstitial();
     } catch (error) {
@@ -107,7 +154,6 @@ export default function App() {
         <TabBtn active={activeTab==="map"} icon="ti-map-pin"
           label={t("tabs.checkpoints")} onClick={()=>setActiveTab("map")}/>
         
-        {/* Central Interception Node: Triggers Ad + Action Display Layout */}
         <div style={{flex:1,display:"flex",justifyContent:"center"}}>
           <button onClick={handlePlusButtonClick} style={{
             width:54,height:54,borderRadius:"50%",
