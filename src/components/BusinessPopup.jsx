@@ -61,13 +61,13 @@ export default function BusinessPopup({ business: preview, onClose }) {
         zIndex:1500,display:"flex",alignItems:"flex-end"}}>
         <div onClick={e=>e.stopPropagation()} style={{width:"100%",background:"#1a1a1a",
           borderRadius:"20px 20px 0 0",border:"0.5px solid rgba(255,255,255,0.09)",
-          maxHeight:"90vh",display:"flex",flexDirection:"column",
+          maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden",
           paddingBottom:"calc(16px + env(safe-area-inset-bottom,0px))"}}>
 
           {/* Handle */}
           <div style={{width:36,height:4,background:"#2e2e2e",borderRadius:2,margin:"12px auto 0",flexShrink:0}}/>
 
-          <div style={{overflowY:"auto",flex:1}}>
+          <div style={{overflowY:"auto",flex:1,WebkitOverflowScrolling:"touch"}}>
 
             {/* Cover photo */}
             {data.cover_url && (
