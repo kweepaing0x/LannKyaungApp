@@ -43,6 +43,7 @@ function HourRow({ day, val, onChange }) {
         {val.closed?"Open":"Close"}
       </button>
     </div>
+    </div>
   );
 }
 
@@ -190,7 +191,8 @@ export default function BusinessDashboard() {
   );
 
   return (
-    <div style={{flex:1,overflowY:"auto",background:"#0d0d0d",
+    <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",background:"#0d0d0d"}}>
+    <div style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",
       paddingBottom:"calc(80px + env(safe-area-inset-bottom,0px))"}}>
 
       {/* Header */}
@@ -440,6 +442,7 @@ export default function BusinessDashboard() {
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 }
