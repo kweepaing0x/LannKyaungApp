@@ -1,122 +1,73 @@
 import { useEffect, useState } from "react";
 import { useAppStore } from "./store";
 import { onAuthChange, getUserDoc, getAdminConfig, getSituationTypes } from "./services/supabaseService";
-import { isConfigured, supabase } from "./supabase"; // ── IMPORT supabase CLIENT HERE ──
+import { isConfigured, supabase } from "./supabase";
 import { useTranslation } from "react-i18next";
-import LoginPage   from "./pages/LoginPage";
-import MapPage     from "./pages/MapPage";
-import ProfilePage from "./pages/ProfilePage";
-import PlusModal   from "./components/PlusModal";
+import LoginPage         from "./pages/LoginPage";
+import MapPage           from "./pages/MapPage";
+import ProfilePage       from "./pages/ProfilePage";
+import BusinessDashboard from "./pages/BusinessDashboard";
+import PlusModal         from "./components/PlusModal";
 
-// ── IMPORT NATIVE APP CORE PLUGIN ───────────────────────────
 import { App as CapacitorApp } from "@capacitor/app";
 import { AdMob, InterstitialAdPluginEvents } from "@capacitor-community/admob";
 
 export default function App() {
   const { t } = useTranslation();
-  const { user, setUser, setUserDoc, setAdminConfig, setSituationTypes,
-    activeTab, setActiveTab, showPlusModal, setShowPlusModal } = useAppStore();
+  const {
+    user, setUser, setUserDoc, setAdminConfig, setSituationTypes,
+    activeTab, setActiveTab, showPlusModal, setShowPlusModal,
+  } = useAppStore();
+
+  const userRole = useAppStore(s => s.userDoc?.role);
   const [ready, setReady] = useState(false);
 
-  // ── DEEP LINK INTERCEPTION LISTENER ─────────────────────────
   useEffect(() => {
     if (!isConfigured) return;
-
-    const setupDeepLinks = async () => {
+    const setup = async () => {
       CapacitorApp.addListener("appUrlOpen", async (event) => {
         try {
-          // Parse the incoming URL scheme structure safely
-          const url = new URL(event.url);
-          const hash = url.hash; // Extracts #access_token=...&refresh_token=...
-
+          const url  = new URL(event.url);
+          const hash = url.hash;
           if (hash) {
-            // Transform url fragments into standard URLSearchParams properties
-            const params = new URLSearchParams(hash.replace("#", "?"));
-            const accessToken = params.get("access_token");
+            const params      = new URLSearchParams(hash.replace("#", "?"));
+            const accessToken  = params.get("access_token");
             const refreshToken = params.get("refresh_token");
-
             if (accessToken && refreshToken) {
-              setReady(false); // Temporarily spin while session injects
-              
-              const { error } = await supabase.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken,
-              });
-
-              if (error) {
-                console.error("Deep link token assignment failure:", error.message);
-                setReady(true);
-              }
-              // Note: if successful, onAuthChange triggers automatically below!
+              setReady(false);
+              const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+              if (error) { console.error("Deep link session error:", error.message); setReady(true); }
             }
           }
-        } catch (err) {
-          console.error("Failed to process native incoming deep-link context:", err);
-          setReady(true);
-        }
+        } catch (err) { console.error("Deep link error:", err); setReady(true); }
       });
     };
-
-    setupDeepLinks();
-
-    return () => {
-      CapacitorApp.removeAllListeners();
-    };
+    setup();
+    return () => { CapacitorApp.removeAllListeners(); };
   }, []);
-  // ────────────────────────────────────────────────────────────
 
-  // ── ADMOB INITIALIZATION & PRELOAD SYSTEM ───────────────────
   useEffect(() => {
-    AdMob.initialize().catch((err) => console.error("AdMob Init Failed:", err));
-
-    const dismissListener = AdMob.addListener(
-      InterstitialAdPluginEvents.Closed,
-      () => {
-        console.log("Interstitial closed. Preloading the next asset hook...");
-        preloadInterstitial();
-      }
-    );
-
+    AdMob.initialize().catch(err => console.error("AdMob Init Failed:", err));
+    const dismissListener = AdMob.addListener(InterstitialAdPluginEvents.Closed, () => { preloadInterstitial(); });
     warmupInterstitial();
-
-    return () => {
-      dismissListener.remove();
-    };
+    return () => { dismissListener.remove(); };
   }, []);
 
   const preloadInterstitial = async () => {
-    try {
-      await AdMob.prepareInterstitial({
-        adId: "ca-app-pub-4379269817546913/1770419841", 
-        isTesting: true, 
-      });
-      console.log("✅ Interstitial preloaded successfully.");
-    } catch (error) {
-      console.error("❌ Interstitial preload failure:", error);
-    }
+    try { await AdMob.prepareInterstitial({ adId: "ca-app-pub-4379269817546913/1770419841", isTesting: true }); }
+    catch (e) { console.error("Interstitial preload error:", e); }
   };
-
-  const warmupInterstitial = async () => {
-    await preloadInterstitial();
-  };
+  const warmupInterstitial = async () => { await preloadInterstitial(); };
 
   const handlePlusButtonClick = async () => {
     setActiveTab("map");
     setShowPlusModal(true);
-
-    try {
-      await AdMob.showInterstitial();
-    } catch (error) {
-      console.warn("Ad asset skipped or structural loading incomplete:", error);
-    }
+    try { await AdMob.showInterstitial(); } catch (e) { console.warn("Ad skipped:", e); }
   };
-  // ────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!isConfigured) { setReady(true); return; }
-
     const timeout = setTimeout(() => setReady(true), 8000);
-
     const unsub = onAuthChange(async (u) => {
       clearTimeout(timeout);
       setUser(u);
@@ -125,35 +76,36 @@ export default function App() {
           const [uDoc, cfg, types] = await Promise.all([getUserDoc(u.id), getAdminConfig(), getSituationTypes()]);
           setUserDoc(uDoc);
           setAdminConfig(cfg);
-          if(types?.length) setSituationTypes(types);
+          if (types?.length) setSituationTypes(types);
         } catch(e) { console.warn("load user:", e.message); }
       }
       setReady(true);
     });
-
     return () => { clearTimeout(timeout); unsub(); };
   }, []);
 
   if (!isConfigured) return <SetupScreen/>;
-  if (!ready) return <Spinner/>;
-  if (!user) return <LoginPage/>;
+  if (!ready)        return <Spinner/>;
+  if (!user)         return <LoginPage/>;
 
   return (
     <>
       <div style={{flex:1,overflow:"hidden",position:"relative",minHeight:0}}>
-        {activeTab==="map"     && <MapPage/>}
-        {activeTab==="profile" && <ProfilePage/>}
+        {activeTab==="map"      && <MapPage/>}
+        {activeTab==="profile"  && <ProfilePage/>}
+        {activeTab==="business" && <BusinessDashboard/>}
       </div>
+
       <nav style={{
-        flexShrink:0, height:60,
+        flexShrink:0,height:60,
         paddingBottom:"env(safe-area-inset-bottom,0px)",
         background:"#0d0d0d",
         borderTop:"0.5px solid rgba(255,255,255,0.08)",
-        display:"flex", alignItems:"center", zIndex:20,
+        display:"flex",alignItems:"center",zIndex:20,
       }}>
         <TabBtn active={activeTab==="map"} icon="ti-map-pin"
           label={t("tabs.checkpoints")} onClick={()=>setActiveTab("map")}/>
-        
+
         <div style={{flex:1,display:"flex",justifyContent:"center"}}>
           <button onClick={handlePlusButtonClick} style={{
             width:54,height:54,borderRadius:"50%",
@@ -167,9 +119,15 @@ export default function App() {
           </button>
         </div>
 
+        {userRole==="shop_owner"&&(
+          <TabBtn active={activeTab==="business"} icon="ti-building-store"
+            label="My Shop" onClick={()=>setActiveTab("business")}/>
+        )}
+
         <TabBtn active={activeTab==="profile"} icon="ti-user-circle"
           label={t("tabs.profile")} onClick={()=>setActiveTab("profile")}/>
       </nav>
+
       {showPlusModal && <PlusModal onClose={()=>setShowPlusModal(false)}/>}
     </>
   );
