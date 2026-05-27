@@ -79,81 +79,18 @@ export async function updateUserDoc(uid,updates) {
 }
 
 // ── ADMIN CONFIG ──────────────────────────────────────────────
-// Integrated default values for semantic forced upgrades
-const DEFAULT_ADMIN_CONFIG = {
-  commission_rate:       0.10,
-  tip_commission_rate:   0.20,
-  tip_amount:            25,
-  pin_expiry_hours:      24,
-  pin_history_days:      7,
-  map_delay_seconds:     1800,
-  checker_radius_km:     2.0,
-  maintenance_mode:      false,
-  contact_telegram:      "@dx0dev",
-  default_language:      "my",
-  min_required_version:  "1.0.0", // Fallback baseline version
-  update_url:            "https://drive.google.com/file/d/16nNlo39y_d-MCAbAN1qe_znwlHC6VCOA/view?usp=drive_link", // Your explicit build URL
-};
-
 export async function getAdminConfig() {
-  if (!isConfigured || !supabase) return DEFAULT_ADMIN_CONFIG;
-  try {
-    // Force a clean fetch without any RLS issues if possible
-    const { data, error } = await supabase
-      .from("admin_config")
-      .select("*")
-      .order('id', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-      
-    if (error) { 
-      console.error("getAdminConfig error:", error.message); 
-      return DEFAULT_ADMIN_CONFIG; 
-    }
-    
-    if (!data) {
-      console.warn("getAdminConfig: No data returned from DB, using defaults");
-      return DEFAULT_ADMIN_CONFIG;
-    }
-
-    // Explicitly check for pin_expiry_hours and log it
-    console.log("getAdminConfig success:", data);
-    
-    // Merge with defaults so missing columns don't break anything
-    const finalConfig = { ...DEFAULT_ADMIN_CONFIG, ...data };
-    
-    // Safety check: ensure numeric fields are actually numbers
-    if (finalConfig.pin_expiry_hours) finalConfig.pin_expiry_hours = Number(finalConfig.pin_expiry_hours);
-    
-    return finalConfig;
-  } catch(e) {
-    console.error("getAdminConfig exception:", e.message);
-    return DEFAULT_ADMIN_CONFIG;
-  }
+  if (!isConfigured||!supabase) return null;
+  const {data} = await supabase.from("admin_config").select("*").maybeSingle();
+  return data;
 }
 
 // ── SITUATION TYPES ───────────────────────────────────────────
-const FALLBACK_SITUATION_TYPES = [
-  {id:"police",  emoji:"🚔", label_my:"ရဲ ရှိသည်",    label_en:"Police",       color:"#E24B4A", severity:3, is_active:true},
-  {id:"blocked", emoji:"🚧", label_my:"လမ်းပိတ်",      label_en:"Road blocked", color:"#EF9F27", severity:3, is_active:true},
-  {id:"traffic", emoji:"🚗", label_my:"လမ်းကြပ်",      label_en:"Traffic",      color:"#EF9F27", severity:2, is_active:true},
-  {id:"danger",  emoji:"⚠️", label_my:"အန္တရာယ်",    label_en:"Danger",       color:"#E24B4A", severity:3, is_active:true},
-  {id:"flood",   emoji:"🌊", label_my:"ရေကြီး",        label_en:"Flood",        color:"#378ADD", severity:3, is_active:true},
-  {id:"repair",  emoji:"🔧", label_my:"လမ်းပြုပြင်", label_en:"Repair",       color:"#888780", severity:1, is_active:true},
-  {id:"event",   emoji:"🎉", label_my:"အခမ်းအနား",    label_en:"Event",        color:"#534AB7", severity:1, is_active:true},
-  {id:"other",   emoji:"❓", label_my:"အခြား",         label_en:"Other",        color:"#888780", severity:1, is_active:true},
-];
-
 export async function getSituationTypes() {
-  if (!isConfigured || !supabase) return FALLBACK_SITUATION_TYPES;
-  try {
-    const { data, error } = await supabase.from("situation_types").select("*")
-      .eq("is_active", true).order("severity", { ascending: false });
-    if (error || !data?.length) return FALLBACK_SITUATION_TYPES;
-    return data;
-  } catch(e) {
-    return FALLBACK_SITUATION_TYPES;
-  }
+  if (!isConfigured||!supabase) return null;
+  const {data} = await supabase.from("situation_types").select("*")
+    .eq("is_active",true).order("severity",{ascending:false});
+  return data;
 }
 
 // ── MEDIA UPLOAD ──────────────────────────────────────────────
@@ -274,7 +211,7 @@ export async function sendTip({ fromUid, toUid, pinId, tipAmount, commissionRate
 
   // 5. Log transactions
   const txRows = [
-    { uid:fromUid, type:"tip_sent",       amount:-tipAmount,   description:"☕ Tea tip sent",      ref_id:pinId, created_at:now.toISOString() },
+    { uid:fromUid, type:"tip_sent",       amount:-tipAmount,   description:"☕ Tea tip sent",     ref_id:pinId, created_at:now.toISOString() },
     { uid:toUid,   type:"tip_received",   amount:receiverGets, description:"☕ Tea tip received",  ref_id:pinId, created_at:now.toISOString() },
     { uid:"admin", type:"tip_commission", amount:commission,   description:"☕ Tip commission",    ref_id:pinId, created_at:now.toISOString() },
   ];
@@ -318,7 +255,7 @@ export async function postCheckRequest({
   if (bal<creditsCost) throw new Error(`Not enough credits. Have ${bal}, need ${creditsCost}`);
   const {error:re} = await supabase.from("check_requests").insert({
     requester_uid:  requesterUid,
-    target_lat:      Number(targetLat), target_lng: Number(targetLng),
+    target_lat:     Number(targetLat), target_lng: Number(targetLng),
     target_label:   targetLabel||"Custom location",
     window_minutes: windowMinutes, credits_cost: creditsCost,
     status:"pending", created_at:now.toISOString(),
@@ -334,16 +271,113 @@ export async function postCheckRequest({
     description:`Check request · ${windowMinutes} min`,created_at:now.toISOString(),
   }).then(()=>{}).catch(()=>{});
 }
-// ── google sign ────────────────────────────────────────────
-export async function signInWithGoogle() {
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      // CRITICAL: This MUST match your Redirect URL setting in Supabase exactly
-      redirectTo: 'lannkyaung://login-callback', 
-      skipBrowserRedirect: false
-    },
-  });
+
+
+// ================================================================
+// BUSINESS LAYER FUNCTIONS
+// ================================================================
+
+export async function getBusinessCategories() {
+  if (!isConfigured||!supabase) return [];
+  const {data} = await supabase.from("business_categories")
+    .select("*").eq("is_active",true).order("sort_order");
+  return data||[];
+}
+
+export function subscribeBusinesses(callback) {
+  if (!isConfigured||!supabase) { callback([]); return ()=>{}; }
+  const fetch = () => {
+    supabase.from("businesses")
+      .select("*, business_categories(emoji,name_en,name_my)")
+      .eq("is_verified",true).eq("is_active",true)
+      .then(({data,error})=>{
+        if(error){ console.error("subscribeBusinesses:",error.message); return; }
+        callback(data||[]);
+      });
+  };
+  fetch();
+  const ch = supabase.channel("businesses-live")
+    .on("postgres_changes",{event:"*",schema:"public",table:"businesses"},fetch)
+    .subscribe();
+  return ()=>supabase.removeChannel(ch);
+}
+
+export async function fetchBusiness(id) {
+  if (!isConfigured||!supabase) return null;
+  const {data,error} = await supabase.from("businesses")
+    .select("*, business_categories(*), business_media(*)")
+    .eq("id",id).single();
+  if (error) { console.error("fetchBusiness:",error.message); return null; }
+  return data;
+}
+
+export async function fetchMyBusiness(ownerUid) {
+  if (!isConfigured||!supabase||!ownerUid) return null;
+  const {data,error} = await supabase.from("businesses")
+    .select("*, business_categories(*), business_media(*)")
+    .eq("owner_uid",ownerUid).maybeSingle();
+  if (error) { console.error("fetchMyBusiness:",error.message); return null; }
+  return data;
+}
+
+export async function createBusiness({ ownerUid, categoryId, name, description, phone, email, address, lat, lng }) {
+  guard();
+  const {data,error} = await supabase.from("businesses").insert({
+    owner_uid: ownerUid, category_id: categoryId,
+    name, description:description||null,
+    phone:phone||null, email:email||null, address:address||null,
+    lat:Number(lat), lng:Number(lng),
+    is_active:true, is_verified:false,
+  }).select().single();
   if (error) throw error;
   return data;
+}
+
+export async function updateBusiness(id, updates) {
+  guard();
+  const {error} = await supabase.from("businesses")
+    .update({...updates, updated_at:new Date().toISOString()}).eq("id",id);
+  if (error) throw error;
+}
+
+export async function updateBusinessLocation(id, lat, lng) {
+  guard();
+  const {error} = await supabase.from("businesses")
+    .update({lat:Number(lat),lng:Number(lng),updated_at:new Date().toISOString()}).eq("id",id);
+  if (error) throw error;
+}
+
+export async function uploadBusinessCover(file, businessId) {
+  guard();
+  const ext  = file.name.split(".").pop();
+  const path = `covers/${businessId}.${ext}`;
+  const {error} = await supabase.storage.from("business-media").upload(path,file,{upsert:true});
+  if (error) throw error;
+  const {data} = supabase.storage.from("business-media").getPublicUrl(path);
+  await supabase.from("businesses")
+    .update({cover_url:data.publicUrl, updated_at:new Date().toISOString()}).eq("id",businessId);
+  return data.publicUrl;
+}
+
+export async function uploadBusinessMedia(file, businessId, type="photo") {
+  guard();
+  const ext  = file.name.split(".").pop();
+  const path = `gallery/${businessId}/${Date.now()}.${ext}`;
+  const {error} = await supabase.storage.from("business-media").upload(path,file,{upsert:false});
+  if (error) throw error;
+  const {data} = supabase.storage.from("business-media").getPublicUrl(path);
+  const {error:me} = await supabase.from("business_media").insert({business_id:businessId,url:data.publicUrl,type});
+  if (me) throw me;
+  return data.publicUrl;
+}
+
+export async function deleteBusinessMedia(mediaId) {
+  guard();
+  const {error} = await supabase.from("business_media").delete().eq("id",mediaId);
+  if (error) throw error;
+}
+
+export async function incrementBusinessView(id) {
+  if (!isConfigured||!supabase) return;
+  await supabase.rpc("increment_business_view",{business_id:id}).catch(()=>{});
 }
