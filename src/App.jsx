@@ -18,7 +18,7 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { AdMob, InterstitialAdPluginEvents } from "@capacitor-community/admob";
 
 // Tabs that hide the nav bar and have their own back button
-const FULLSCREEN_TABS = ["market","checkout","orders","admin"];
+const FULLSCREEN_TABS = ["market","checkout","orders","admin","business"];
 
 export default function App() {
   const { t } = useTranslation();
@@ -148,16 +148,6 @@ export default function App() {
             </button>
           </div>
 
-          {userRole==="shop_owner" && (
-            <TabBtn active={activeTab==="business"} icon="ti-building-store"
-              label="My Shop" onClick={()=>setActiveTab("business")}/>
-          )}
-
-          {userRole==="admin" && (
-            <TabBtn active={activeTab==="admin"} icon="ti-settings"
-              label="Admin" onClick={()=>setActiveTab("admin")}/>
-          )}
-
           <TabBtn active={activeTab==="profile"} icon="ti-user-circle"
             label={t("tabs.profile")} onClick={()=>setActiveTab("profile")}/>
         </nav>
@@ -165,6 +155,7 @@ export default function App() {
 
       {/* Quick action menu */}
       <QuickActionMenu
+        userRole={userRole}
         onSelectPin={showAdThenOpenPin}
         onSelectCheck={() => {
           setShowQuickMenu(false);
@@ -174,6 +165,18 @@ export default function App() {
         onSelectMarket={() => {
           setShowQuickMenu(false);
           setActiveTab("market");
+        }}
+        onSelectShop={() => {
+          setShowQuickMenu(false);
+          setActiveTab("business");
+        }}
+        onSelectAdmin={() => {
+          setShowQuickMenu(false);
+          setActiveTab("admin");
+        }}
+        onSelectOrders={() => {
+          setShowQuickMenu(false);
+          setActiveTab("orders");
         }}
       />
 
