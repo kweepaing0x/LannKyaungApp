@@ -394,3 +394,125 @@ export async function signInWithGoogle() {
   if (error) throw error;
   return data;
 }
+
+
+// ================================================================
+// MARKET SYSTEM FUNCTIONS
+// ================================================================
+
+export async function getMarketCategories() {
+  if (!isConfigured||!supabase) return [];
+  const {data} = await supabase.from("market_categories")
+    .select("*").eq("is_active",true).order("sort_order");
+  return data||[];
+}
+
+export async function getMarketProducts() {
+  if (!isConfigured||!supabase) return [];
+  const {data} = await supabase.from("market_products")
+    .select("*").eq("is_active",true).order("sort_order");
+  return data||[];
+}
+
+export async function createMarketProduct(fields) {
+  guard();
+  const {error} = await supabase.from("market_products").insert(fields);
+  if (error) throw error;
+}
+
+export async function updateMarketProduct(id, fields) {
+  guard();
+  const {error} = await supabase.from("market_products").update(fields).eq("id",id);
+  if (error) throw error;
+}
+
+export async function toggleMarketProduct(id, isActive) {
+  guard();
+  const {error} = await supabase.from("market_products")
+    .update({is_active:isActive}).eq("id",id);
+  if (error) throw error;
+}
+
+export async function getMyOrders(userUid) {
+  if (!isConfigured||!supabase||!userUid) return [];
+  const {data,error} = await supabase.from("market_orders")
+    .select("*").eq("user_uid",userUid)
+    .order("created_at",{ascending:false});
+  if (error) { console.error("getMyOrders:",error.message); return []; }
+  return data||[];
+}
+
+export async function getAllOrders() {
+  if (!isConfigured||!supabase) return [];
+  const {data,error} = await supabase.from("market_orders")
+    .select("*").order("created_at",{ascending:false});
+  if (error) { console.error("getAllOrders:",error.message); return []; }
+  return data||[];
+}
+
+export async function updateOrderStatus(orderId, status) {
+  guard();
+  const {error} = await supabase.from("market_orders")
+    .update({status, updated_at:new Date().toISOString()}).eq("id",orderId);
+  if (error) throw error;
+}
+
+export async function placeMarketOrder({
+  userUid, customerName, customerPhone,
+  deliveryLat, deliveryLng,
+  items, customNote, remark,
+  deliveryFee, subtotalThb, totalThb,
+}) {
+  guard();
+
+  const {data,error} = await supabase.from("market_orders").insert({
+    user_uid:        userUid,
+    customer_name:   customerName,
+    customer_phone:  customerPhone,
+    delivery_lat:    deliveryLat ? Number(deliveryLat) : null,
+    delivery_lng:    deliveryLng ? Number(deliveryLng) : null,
+    items:           items,
+    custom_note:     customNote||null,
+    remark:          remark||null,
+    delivery_fee:    deliveryFee,
+    subtotal_thb:    subtotalThb,
+    total_thb:       totalThb,
+    status:          "pending",
+    created_at:      new Date().toISOString(),
+  }).select("order_number").single();
+
+  if (error) throw error;
+
+  // Send Telegram notification
+  const telegramToken  = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
+  const telegramChatId = import.meta.env.VITE_TELEGRAM_CHAT_ID;
+
+  if (telegramToken && telegramChatId) {
+    const itemLines = items.map(i =>
+      `  ${i.emoji} ${i.name_my} × ${i.qty} ${i.unit} — ${i.subtotal} THB`
+    ).join("\n");
+
+    const mapLink = deliveryLat && deliveryLng
+      ? `📍 https://maps.google.com/?q=${deliveryLat},${deliveryLng}`
+      : "📍 No location";
+
+    const msg =
+      `🛒 New Order #${data.order_number}\n\n` +
+      `👤 ${customerName}  📞 ${customerPhone}\n` +
+      `${mapLink}\n\n` +
+      `Items:\n${itemLines}\n` +
+      (customNote ? `✏️ Custom: ${customNote}\n` : "") +
+      `\nSubtotal: ${subtotalThb} THB\n` +
+      `Delivery: ${deliveryFee} THB\n` +
+      `Total: ${totalThb} THB` +
+      (remark ? `\n\nNote: ${remark}` : "");
+
+    fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: telegramChatId, text: msg }),
+    }).catch(() => {});
+  }
+
+  return data;
+}
