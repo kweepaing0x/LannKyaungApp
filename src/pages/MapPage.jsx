@@ -52,6 +52,7 @@ export default function MapPage(){
     userDoc,
     businesses, setBusinesses,
     showBusinesses, setShowBusinesses,
+    setActiveTab,
   } = useAppStore();
 
   const [mapReady,        setMapReady]        = useState(false);
@@ -368,6 +369,28 @@ export default function MapPage(){
           </div>
         )}
       </>)}
+
+      {/* Floating shop button — bottom left */}
+      {!pickingLocation&&!isRequiredToUpdate&&(
+        <button
+          onClick={()=>setActiveTab("market")}
+          style={{
+            position:"fixed",
+            bottom:"calc(76px + env(safe-area-inset-bottom,0px))",
+            left:16,
+            zIndex:500,
+            width:48,height:48,
+            borderRadius:"50%",
+            background:"rgba(20,20,20,0.96)",
+            border:"0.5px solid rgba(168,240,198,0.3)",
+            display:"flex",alignItems:"center",justifyContent:"center",
+            cursor:"pointer",
+            boxShadow:"0 4px 16px rgba(0,0,0,0.5)",
+            fontSize:22,
+          }}>
+          🛒
+        </button>
+      )}
 
       {/* GPS popup */}
       {showGpsPopup&&!pickingLocation&&(
