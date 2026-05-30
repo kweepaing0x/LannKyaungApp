@@ -25,8 +25,6 @@ export default function CheckoutPage() {
   const [error,   setError]   = useState(null);
 
   const deliveryFee = adminConfig?.delivery_fee_thb ?? 100;
-  const subtotal    = cart.reduce((s, i) => s + i.product.price_thb * i.qty, 0);
-  const total       = subtotal + (cart.length > 0 || customNote ? deliveryFee : 0);
 
   const UNIT_LABELS = { kg:"kg", pack:"ထုပ်", bunch:"စည်း", piece:"ခု", box:"သေတ္တာ", bottle:"ပုလင်း" };
 
@@ -78,8 +76,8 @@ export default function CheckoutPage() {
         customNote:   customNote || null,
         remark:       remark || null,
         deliveryFee,
-        subtotalThb:  subtotal,
-        totalThb:     total,
+        subtotalThb:  0,
+        totalThb:     deliveryFee,
       });
 
       setOrderNum(order.order_number);
@@ -156,9 +154,6 @@ export default function CheckoutPage() {
               padding:"8px 0", borderBottom:"0.5px solid rgba(255,255,255,0.05)" }}>
               <span style={{ color:"#ccc", fontSize:13 }}>
                 {i.product.emoji} {i.product.name_my} × {i.qty} {UNIT_LABELS[i.product.unit]||i.product.unit}
-              </span>
-              <span style={{ color:"#fff", fontSize:13, fontWeight:600 }}>
-                {(i.product.price_thb * i.qty).toFixed(0)} THB
               </span>
             </div>
           ))}
@@ -248,9 +243,7 @@ export default function CheckoutPage() {
         <div style={{ background:"rgba(255,255,255,0.03)", borderRadius:12,
           border:"0.5px solid rgba(255,255,255,0.07)", padding:"14px", marginBottom:16 }}>
           {[
-            { label:"Subtotal", value:`${subtotal.toFixed(0)} THB`, color:"#ccc" },
-            { label:"Delivery fee", value:`${deliveryFee} THB`, color:"#EF9F27" },
-            { label:"Total", value:`${total.toFixed(0)} THB`, color:"#fff", bold:true },
+            { label:"Delivery Fee", value:`${deliveryFee} THB`, color:"#EF9F27", bold:true },
           ].map(row => (
             <div key={row.label} style={{ display:"flex", justifyContent:"space-between",
               padding:"6px 0", borderBottom: row.bold?"none":"0.5px solid rgba(255,255,255,0.04)" }}>
@@ -275,7 +268,7 @@ export default function CheckoutPage() {
           color: loading ? "#666" : "#0d0d0d",
           fontSize:15, fontWeight:800,
           cursor: loading ? "not-allowed" : "pointer", fontFamily:"inherit" }}>
-          {loading ? "Placing order..." : `✓ Place Order · ${total.toFixed(0)} THB`}
+          {loading ? "Placing order..." : "✓ Place Order"}
         </button>
 
         <div style={{ color:"#444", fontSize:10, textAlign:"center",
