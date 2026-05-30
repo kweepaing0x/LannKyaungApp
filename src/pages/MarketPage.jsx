@@ -34,7 +34,8 @@ export default function MarketPage() {
   const [selectedCat,  setSelectedCat]  = useState(null);
   const [loading,      setLoading]      = useState(true);
 
-  const deliveryFee = adminConfig?.delivery_fee_thb ?? 100;
+  const deliveryFee   = adminConfig?.delivery_fee_thb ?? 100;
+  const hidePrices    = adminConfig?.hide_product_prices ?? true;
 
   useEffect(() => {
     Promise.all([getMarketCategories(), getMarketProducts()])
@@ -86,7 +87,7 @@ export default function MarketPage() {
             padding:"4px 12px", cursor:"pointer" }}
             onClick={() => setActiveTab("checkout")}>
             <span style={{ color:"#a8f0c6", fontSize:11, fontWeight:700 }}>
-              🛒 {cartCount} items · {cartTotal.toFixed(0)} THB →
+              🛒 {cartCount} item{cartCount!==1?"s":""} → Checkout
             </span>
           </div>
         )}
@@ -149,8 +150,9 @@ export default function MarketPage() {
                     <div style={{ fontSize:32, flexShrink:0 }}>{product.emoji}</div>
                     <div style={{ flex:1 }}>
                       <div style={{ color:"#fff", fontSize:14, fontWeight:600 }}>{product.name_my}</div>
-                      <div style={{ color:"#EF9F27", fontSize:12, fontWeight:700, marginTop:2 }}>
-                        {product.price_thb} THB / {UNIT_LABELS[product.unit]||product.unit}
+                      <div style={{ color:"#666", fontSize:12, marginTop:2 }}>
+                        {UNIT_LABELS[product.unit]||product.unit}
+                        {!hidePrices&&<span style={{color:"#EF9F27",fontWeight:700,marginLeft:6}}>{product.price_thb} THB</span>}
                       </div>
                     </div>
                     {qty > 0
@@ -225,16 +227,9 @@ export default function MarketPage() {
           </div>
 
           <div style={{ display:"flex", justifyContent:"space-between",
-            alignItems:"center", marginBottom:8 }}>
-            <span style={{ color:"#888", fontSize:12 }}>Subtotal</span>
-            <span style={{ color:"#fff", fontSize:12, fontWeight:600 }}>
-              {cartTotal.toFixed(0)} THB
-            </span>
-          </div>
-          <div style={{ display:"flex", justifyContent:"space-between",
             alignItems:"center", marginBottom:12 }}>
             <span style={{ color:"#888", fontSize:12 }}>Delivery fee</span>
-            <span style={{ color:"#EF9F27", fontSize:12, fontWeight:600 }}>
+            <span style={{ color:"#EF9F27", fontSize:13, fontWeight:700 }}>
               {deliveryFee} THB
             </span>
           </div>
@@ -244,7 +239,7 @@ export default function MarketPage() {
             background:"linear-gradient(135deg,#a8f0c6,#4a9eff)",
             color:"#0d0d0d", fontSize:14, fontWeight:800,
             cursor:"pointer", fontFamily:"inherit" }}>
-            🛒 Checkout · {(cartTotal + deliveryFee).toFixed(0)} THB
+            🛒 Checkout ({cartCount} item{cartCount!==1?"s":""}) →
           </button>
         </div>
       )}
