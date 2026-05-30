@@ -53,12 +53,14 @@ export default function MapPage(){
     businesses, setBusinesses,
     showBusinesses, setShowBusinesses,
     setActiveTab,
+    userDoc,
   } = useAppStore();
 
   const [mapReady,        setMapReady]        = useState(false);
   const [historyPins,     setHistoryPins]     = useState([]);
   const [selectedPin,     setSelectedPin]     = useState(null);
   const [selectedBusiness,setSelectedBusiness]= useState(null);
+  const [showShopDial,    setShowShopDial]     = useState(false);
   const [gpsStatus,       setGpsStatus]       = useState("pending");
   const [showGpsPopup,    setShowGpsPopup]    = useState(false);
 
@@ -247,7 +249,7 @@ export default function MapPage(){
 
   return(
     <div style={{position:"relative",width:"100%",height:"100%",background:"#0d0d0d"}}>
-      <style>{`@keyframes lkPulse{0%{transform:scale(1);opacity:.6}100%{transform:scale(2.2);opacity:0}}`}</style>
+      <style>{`@keyframes lkPulse{0%{transform:scale(1);opacity:.6}100%{transform:scale(2.2);opacity:0}}@keyframes dialUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}`}</style>
       <div ref={mapRef} style={{width:"100%",height:"100%"}}/>
 
       {!mapReady&&!isRequiredToUpdate&&(
@@ -370,26 +372,117 @@ export default function MapPage(){
         )}
       </>)}
 
-      {/* Floating shop button — bottom left */}
+      {/* Floating shop speed-dial — bottom left */}
       {!pickingLocation&&!isRequiredToUpdate&&(
-        <button
-          onClick={()=>setActiveTab("market")}
-          style={{
-            position:"fixed",
-            bottom:"calc(76px + env(safe-area-inset-bottom,0px))",
-            left:16,
-            zIndex:500,
-            width:48,height:48,
-            borderRadius:"50%",
-            background:"rgba(20,20,20,0.96)",
-            border:"0.5px solid rgba(168,240,198,0.3)",
-            display:"flex",alignItems:"center",justifyContent:"center",
-            cursor:"pointer",
-            boxShadow:"0 4px 16px rgba(0,0,0,0.5)",
-            fontSize:22,
-          }}>
-          🛒
-        </button>
+        <>
+          {/* Backdrop when dial is open */}
+          {showShopDial&&(
+            <div onClick={()=>setShowShopDial(false)}
+              style={{position:"fixed",inset:0,zIndex:498,background:"rgba(0,0,0,0.5)"}}/>
+          )}
+
+          {/* Speed-dial items — appear above main button */}
+          {showShopDial&&(
+            <div style={{
+              position:"fixed",
+              bottom:"calc(134px + env(safe-area-inset-bottom,0px))",
+              left:12,
+              zIndex:499,
+              display:"flex",
+              flexDirection:"column",
+              gap:8,
+            }}>
+              {/* Option 2 — Business */}
+              <div style={{display:"flex",alignItems:"center",gap:8,animation:"dialUp 0.12s ease both"}}>
+                <button
+                  onClick={()=>{
+                    setShowShopDial(false);
+                    const role = userDoc?.role;
+                    if(role==="shop_owner") setActiveTab("business");
+                    else if(role==="admin") setActiveTab("business");
+                    else alert("To list your business, contact @dx0dev on Telegram.
+
+We will set up your shop account.");
+                  }}
+                  style={{
+                    width:44,height:44,borderRadius:"50%",
+                    background:"rgba(18,18,18,0.98)",
+                    border:"0.5px solid rgba(83,74,183,0.5)",
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    cursor:"pointer",fontSize:20,
+                    boxShadow:"0 4px 16px rgba(0,0,0,0.6)",
+                  }}>
+                  🏪
+                </button>
+                <div style={{
+                  background:"rgba(18,18,18,0.98)",
+                  border:"0.5px solid rgba(255,255,255,0.08)",
+                  borderRadius:10,padding:"6px 12px",
+                  boxShadow:"0 4px 14px rgba(0,0,0,0.5)",
+                }}>
+                  <div style={{color:"#fff",fontSize:12,fontWeight:700}}>
+                    {userDoc?.role==="shop_owner"||userDoc?.role==="admin"
+                      ?"Manage My Shop"
+                      :"Add Your Business"}
+                  </div>
+                  <div style={{color:"#555",fontSize:10,marginTop:1}}>
+                    {userDoc?.role==="shop_owner"||userDoc?.role==="admin"
+                      ?"Edit profile & hours"
+                      :"Contact admin to list"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Option 1 — Market */}
+              <div style={{display:"flex",alignItems:"center",gap:8,animation:"dialUp 0.08s ease both"}}>
+                <button
+                  onClick={()=>{ setShowShopDial(false); setActiveTab("market"); }}
+                  style={{
+                    width:44,height:44,borderRadius:"50%",
+                    background:"rgba(18,18,18,0.98)",
+                    border:"0.5px solid rgba(168,240,198,0.4)",
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    cursor:"pointer",fontSize:20,
+                    boxShadow:"0 4px 16px rgba(0,0,0,0.6)",
+                  }}>
+                  🛒
+                </button>
+                <div style={{
+                  background:"rgba(18,18,18,0.98)",
+                  border:"0.5px solid rgba(255,255,255,0.08)",
+                  borderRadius:10,padding:"6px 12px",
+                  boxShadow:"0 4px 14px rgba(0,0,0,0.5)",
+                }}>
+                  <div style={{color:"#fff",fontSize:12,fontWeight:700}}>စျေးမှာရန်</div>
+                  <div style={{color:"#555",fontSize:10,marginTop:1}}>Order from market</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Main dial button */}
+          <button
+            onClick={()=>setShowShopDial(!showShopDial)}
+            style={{
+              position:"fixed",
+              bottom:"calc(76px + env(safe-area-inset-bottom,0px))",
+              left:12,
+              zIndex:500,
+              width:48,height:48,
+              borderRadius:"50%",
+              background:showShopDial
+                ?"linear-gradient(135deg,#534AB7,#7c6fff)"
+                :"rgba(18,18,18,0.97)",
+              border:`0.5px solid ${showShopDial?"rgba(83,74,183,0.6)":"rgba(168,240,198,0.35)"}`,
+              display:"flex",alignItems:"center",justifyContent:"center",
+              cursor:"pointer",
+              boxShadow:"0 4px 18px rgba(0,0,0,0.6)",
+              fontSize:showShopDial?20:22,
+              transition:"all 0.2s ease",
+            }}>
+            {showShopDial?"✕":"🛒"}
+          </button>
+        </>
       )}
 
       {/* GPS popup */}
